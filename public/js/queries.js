@@ -148,9 +148,10 @@ const Queries = {
         html += '</div>';
         
         const hasMultipleSeries = result.frames.length > 1;
+        const hasGroupByData = this.hasGroupByData(result.frames);
         GrafanaConfig.selectedSeries = seriesIndex;
         
-        if (hasMultipleSeries) {
+        if (hasMultipleSeries || hasGroupByData) {
             html += '<div class="series-selector">';
             html += '<label for="seriesSelect">Select Group (from GROUP BY clause):</label>';
             html += '<select id="seriesSelect" class="series-dropdown" onchange="selectSeries(this.value)">';
@@ -176,7 +177,7 @@ const Queries = {
         const frameToDisplay = result.frames[seriesIndex] || result.frames[0];
         
         if (frameToDisplay && frameToDisplay.schema && frameToDisplay.schema.fields && frameToDisplay.data && frameToDisplay.data.values) {
-            if (hasMultipleSeries) {
+            if (hasMultipleSeries || hasGroupByData) {
                 const groupName = Utils.extractSeriesName(frameToDisplay, seriesIndex);
                 html += '<h3>Group: ' + Utils.escapeHtml(groupName) + '</h3>';
             } else {
@@ -195,7 +196,7 @@ const Queries = {
         }
         
         // Add all groups summary for multiple series
-        if (hasMultipleSeries) {
+        if (hasMultipleSeries || hasGroupByData) {
             html += '<details style="margin-top: 20px;"><summary style="cursor: pointer; color: #f46800;">View All Groups Summary</summary>';
             html += '<div style="margin-top: 10px;">';
             result.frames.forEach(function(frame, frameIndex) {
@@ -377,6 +378,37 @@ const Queries = {
         
         html += '</div></div>';
         return html;
+    },
+
+    // Check if frames contain GROUP BY data (even with single frame)
+    hasGroupByData(frames) {
+        if (!frames || frames.length === 0) return false;
+        
+        // Check each frame for tag/group columns
+        return frames.some(frame => {
+            if (!frame.schema || !frame.schema.fields) return false;
+            
+            // Look for tag fields (non-time string fields)
+            const tagFields = frame.schema.fields.filter(field => 
+                field.type === 'string' && 
+                field.name !== 'time' && 
+                !field.name.startsWith('_')
+            );
+            
+            // Check if we have tag fields with actual values
+            if (tagFields.length > 0 && frame.data && frame.data.values) {
+                return tagFields.some(field => {
+                    const fieldIndex = frame.schema.fields.indexOf(field);
+                    if (fieldIndex >= 0 && frame.data.values[fieldIndex] && frame.data.values[fieldIndex].length > 0) {
+                        const value = frame.data.values[fieldIndex][0];
+                        return value !== null && value !== undefined && value !== '';
+                    }
+                    return false;
+                });
+            }
+            
+            return false;
+        });
     }
 };
 
