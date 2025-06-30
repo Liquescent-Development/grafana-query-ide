@@ -8,10 +8,13 @@ const Schema = {
     influxRetentionPolicies: [],
     influxFields: {},
     influxTags: {},
+    influxTagValues: {}, // Store tag values keyed by "measurement:tag"
     selectedMeasurement: null,
     selectedRetentionPolicy: null,
+    selectedTag: null, // Track which tag is selected
     isLoading: false,
     isLoadingMeasurement: false,
+    isLoadingTagValues: false,
     
     // Initialize schema explorer
     initialize() {
@@ -228,6 +231,7 @@ const Schema = {
     async loadMeasurementSchema(measurement, retentionPolicy = 'autogen') {
         this.selectedMeasurement = measurement;
         this.selectedRetentionPolicy = retentionPolicy;
+        this.selectedTag = null; // Clear selected tag when changing measurement
         this.isLoadingMeasurement = true;
         
         // Render UI to show loading state
@@ -379,6 +383,65 @@ const Schema = {
         }
         
         return await response.json();
+    },
+    
+    // Load tag values for a specific tag
+    async loadTagValues(tag) {
+        if (!this.selectedMeasurement || !tag) return;
+        
+        const key = `${this.selectedMeasurement}:${tag}`;
+        this.selectedTag = tag;
+        this.isLoadingTagValues = true;
+        
+        // Update UI to show loading state
+        this.renderSchemaUI();
+        
+        try {
+            console.log(`Loading values for tag: ${tag} in measurement: ${this.selectedMeasurement}`);
+            
+            // Query for tag values
+            const tagValuesQuery = `SHOW TAG VALUES FROM "${this.selectedMeasurement}" WITH KEY = "${tag}"`;
+            console.log('Executing tag values query:', tagValuesQuery);
+            const tagValuesResult = await this.executeSchemaQuery(tagValuesQuery, 'influxdb');
+            console.log('Tag values result:', tagValuesResult);
+            
+            if (tagValuesResult && tagValuesResult.results && tagValuesResult.results.A) {
+                // Extract values from the result
+                const values = [];
+                const frames = tagValuesResult.results.A.frames || [];
+                
+                for (const frame of frames) {
+                    if (!frame.data || !frame.data.values) continue;
+                    
+                    // Tag values typically come in the second column (index 1)
+                    if (frame.data.values.length > 1 && Array.isArray(frame.data.values[1])) {
+                        const columnValues = frame.data.values[1];
+                        for (const value of columnValues) {
+                            if (value !== null && value !== undefined) {
+                                const stringValue = String(value);
+                                if (!values.includes(stringValue)) {
+                                    values.push(stringValue);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                this.influxTagValues[key] = values.sort();
+                console.log(`Extracted ${values.length} values for tag ${tag}:`, this.influxTagValues[key]);
+            } else {
+                console.warn('No tag values found for:', tag);
+                this.influxTagValues[key] = [];
+            }
+            
+        } catch (error) {
+            console.error('Error loading tag values:', error);
+            this.showError('Failed to load tag values: ' + error.message);
+            this.influxTagValues[key] = [];
+        } finally {
+            this.isLoadingTagValues = false;
+            this.renderSchemaUI();
+        }
     },
     
     // Extract results from InfluxDB response
@@ -599,9 +662,38 @@ const Schema = {
                     html += '<div class="schema-list" id="tagsList">';
                     
                     for (const tag of tags) {
-                        html += '<div class="schema-item" onclick="insertTag(\'' + Utils.escapeHtml(tag) + '\')">';
+                        const isSelected = this.selectedTag === tag;
+                        const key = `${this.selectedMeasurement}:${tag}`;
+                        const tagValues = this.influxTagValues[key] || [];
+                        
+                        html += '<div class="schema-tag-wrapper">';
+                        
+                        // Tag item with expand/collapse icon
+                        html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="toggleTag(\'' + Utils.escapeHtml(tag) + '\')">';
+                        html += '<span class="schema-expand-icon">' + (isSelected ? '▼' : '▶') + '</span>';
                         html += '<span class="schema-item-name">' + Utils.escapeHtml(tag) + '</span>';
                         html += '<span class="schema-item-type tag">tag</span>';
+                        html += '</div>';
+                        
+                        // Tag values (shown when tag is selected)
+                        if (isSelected) {
+                            html += '<div class="schema-tag-values">';
+                            
+                            if (this.isLoadingTagValues) {
+                                html += '<div class="schema-loading">Loading tag values...</div>';
+                            } else if (tagValues.length === 0) {
+                                html += '<div class="schema-empty">No values found</div>';
+                            } else {
+                                for (const value of tagValues) {
+                                    html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(tag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
+                                    html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
+                                    html += '</div>';
+                                }
+                            }
+                            
+                            html += '</div>';
+                        }
+                        
                         html += '</div>';
                     }
                     
@@ -661,6 +753,23 @@ function insertTag(tag) {
     Schema.insertIntoQuery(tag);
 }
 
+function toggleTag(tag) {
+    if (Schema.selectedTag === tag) {
+        // If already selected, deselect
+        Schema.selectedTag = null;
+        Schema.renderSchemaUI();
+    } else {
+        // Select the tag and load its values
+        Schema.loadTagValues(tag);
+    }
+}
+
+function insertTagValue(tag, value) {
+    // Insert in WHERE clause format: tag="value"
+    const whereClause = `"${tag}"='${value}'`;
+    Schema.insertIntoQuery(whereClause);
+}
+
 function selectMeasurement(measurement) {
     if (!measurement) {
         Schema.selectedMeasurement = null;
@@ -718,9 +827,38 @@ function filterInfluxTags(searchTerm) {
         html = '<div class="schema-empty">No tags found</div>';
     } else {
         for (const tag of filteredTags) {
-            html += '<div class="schema-item" onclick="insertTag(\'' + Utils.escapeHtml(tag) + '\')">';
+            const isSelected = Schema.selectedTag === tag;
+            const key = `${Schema.selectedMeasurement}:${tag}`;
+            const tagValues = Schema.influxTagValues[key] || [];
+            
+            html += '<div class="schema-tag-wrapper">';
+            
+            // Tag item with expand/collapse icon
+            html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="toggleTag(\'' + Utils.escapeHtml(tag) + '\')">';
+            html += '<span class="schema-expand-icon">' + (isSelected ? '▼' : '▶') + '</span>';
             html += '<span class="schema-item-name">' + Utils.escapeHtml(tag) + '</span>';
             html += '<span class="schema-item-type tag">tag</span>';
+            html += '</div>';
+            
+            // Tag values (shown when tag is selected)
+            if (isSelected) {
+                html += '<div class="schema-tag-values">';
+                
+                if (Schema.isLoadingTagValues) {
+                    html += '<div class="schema-loading">Loading tag values...</div>';
+                } else if (tagValues.length === 0) {
+                    html += '<div class="schema-empty">No values found</div>';
+                } else {
+                    for (const value of tagValues) {
+                        html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(tag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
+                        html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
+                        html += '</div>';
+                    }
+                }
+                
+                html += '</div>';
+            }
+            
             html += '</div>';
         }
     }
