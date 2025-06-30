@@ -236,18 +236,38 @@ const Schema = {
         try {
             console.log(`Loading schema for measurement: ${measurement}, retention policy: ${retentionPolicy}`);
             
-            // Get field keys
-            const fieldsQuery = `SHOW FIELD KEYS FROM "${measurement}"`;
+            // Get field keys - try without retention policy first
+            let fieldsQuery = `SHOW FIELD KEYS FROM "${measurement}"`;
             console.log('Executing fields query:', fieldsQuery);
-            const fieldsResult = await this.executeSchemaQuery(fieldsQuery, 'influxdb');
+            let fieldsResult = await this.executeSchemaQuery(fieldsQuery, 'influxdb');
             console.log('Fields result:', fieldsResult);
             
+            // Check if we got fields
+            let hasFields = false;
             if (fieldsResult && fieldsResult.results && fieldsResult.results.A) {
-                this.influxFields[measurement] = this.extractInfluxResults(fieldsResult.results.A);
-                console.log('Extracted fields:', this.influxFields[measurement]);
-            } else {
-                console.warn('No fields data found for measurement:', measurement);
-                this.influxFields[measurement] = [];
+                const extractedFields = this.extractInfluxResults(fieldsResult.results.A);
+                if (extractedFields.length > 0) {
+                    this.influxFields[measurement] = extractedFields;
+                    console.log('Extracted fields:', this.influxFields[measurement]);
+                    hasFields = true;
+                }
+            }
+            
+            // If no fields found, try with retention policy
+            if (!hasFields) {
+                console.warn('No fields found with basic query, trying with retention policy:', retentionPolicy);
+                fieldsQuery = `SHOW FIELD KEYS FROM "${retentionPolicy}"."${measurement}"`;
+                console.log('Executing fields query with retention policy:', fieldsQuery);
+                fieldsResult = await this.executeSchemaQuery(fieldsQuery, 'influxdb');
+                console.log('Fields result with retention policy:', fieldsResult);
+                
+                if (fieldsResult && fieldsResult.results && fieldsResult.results.A) {
+                    this.influxFields[measurement] = this.extractInfluxResults(fieldsResult.results.A);
+                    console.log('Extracted fields with retention policy:', this.influxFields[measurement]);
+                } else {
+                    console.warn('No fields data found for measurement:', measurement);
+                    this.influxFields[measurement] = [];
+                }
             }
             
             // Get tag keys
