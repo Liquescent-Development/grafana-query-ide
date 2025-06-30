@@ -400,7 +400,7 @@ const Schema = {
             console.log(`Loading values for tag: ${tag} in measurement: ${this.selectedMeasurement}`);
             
             // Query for tag values
-            const tagValuesQuery = `SHOW TAG VALUES FROM "${this.selectedMeasurement}" WITH KEY = "${tag}"`;
+            const tagValuesQuery = `SHOW TAG VALUES WITH KEY = "${tag}"`;
             console.log('Executing tag values query:', tagValuesQuery);
             const tagValuesResult = await this.executeSchemaQuery(tagValuesQuery, 'influxdb');
             console.log('Tag values result:', tagValuesResult);
