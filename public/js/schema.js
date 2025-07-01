@@ -410,27 +410,14 @@ const Schema = {
                 const values = [];
                 const frames = tagValuesResult.results.A.frames || [];
                 
-                console.log('Processing frames for tag values:', frames.length);
-                
                 for (const frame of frames) {
-                    console.log('Frame structure:', {
-                        schema: frame.schema,
-                        data: frame.data
-                    });
-                    
                     if (!frame.data || !frame.data.values) continue;
-                    
-                    // Log the shape of the data
-                    console.log('Frame data values length:', frame.data.values.length);
-                    console.log('Frame data values:', frame.data.values);
                     
                     // SHOW TAG VALUES returns results with the tag key in first column and value in second
                     // But we should check all columns to be safe
                     for (let i = 0; i < frame.data.values.length; i++) {
                         const column = frame.data.values[i];
                         if (Array.isArray(column)) {
-                            console.log(`Column ${i} values:`, column);
-                            
                             // Skip the first column if it contains the tag name
                             if (i === 0 && column.length > 0 && column[0] === tag) {
                                 continue;
@@ -674,7 +661,16 @@ const Schema = {
                 
                 if (tags.length > 0) {
                     html += '<div class="schema-subsection">';
-                    html += '<h4>Tags (' + Utils.escapeHtml(this.selectedMeasurement) + ')</h4>';
+                    html += '<h4>Tags & Values (' + Utils.escapeHtml(this.selectedMeasurement) + ')</h4>';
+                    
+                    // Container for side-by-side layout
+                    html += '<div class="schema-tags-container">';
+                    
+                    // Left panel - Tags
+                    html += '<div class="schema-tags-panel">';
+                    html += '<div class="schema-panel-header">';
+                    html += '<h5>Tag Keys</h5>';
+                    html += '</div>';
                     
                     // Search box for tags
                     html += '<div class="schema-search">';
@@ -685,41 +681,55 @@ const Schema = {
                     
                     for (const tag of tags) {
                         const isSelected = this.selectedTag === tag;
-                        const key = `${this.selectedMeasurement}:${tag}`;
-                        const tagValues = this.influxTagValues[key] || [];
                         
-                        html += '<div class="schema-tag-wrapper">';
-                        
-                        // Tag item with expand/collapse icon
-                        html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="toggleTag(\'' + Utils.escapeHtml(tag) + '\')">';
-                        html += '<span class="schema-expand-icon">' + (isSelected ? '▼' : '▶') + '</span>';
+                        html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="selectTag(\'' + Utils.escapeHtml(tag) + '\')">';
                         html += '<span class="schema-item-name">' + Utils.escapeHtml(tag) + '</span>';
                         html += '<span class="schema-item-type tag">tag</span>';
-                        html += '</div>';
-                        
-                        // Tag values (shown when tag is selected)
-                        if (isSelected) {
-                            html += '<div class="schema-tag-values">';
-                            
-                            if (this.isLoadingTagValues) {
-                                html += '<div class="schema-loading">Loading tag values...</div>';
-                            } else if (tagValues.length === 0) {
-                                html += '<div class="schema-empty">No values found</div>';
-                            } else {
-                                for (const value of tagValues) {
-                                    html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(tag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
-                                    html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
-                                    html += '</div>';
-                                }
-                            }
-                            
-                            html += '</div>';
-                        }
-                        
                         html += '</div>';
                     }
                     
                     html += '</div>';
+                    html += '</div>'; // End tags panel
+                    
+                    // Right panel - Tag Values
+                    html += '<div class="schema-values-panel">';
+                    html += '<div class="schema-panel-header">';
+                    html += '<h5>Tag Values' + (this.selectedTag ? ' (' + Utils.escapeHtml(this.selectedTag) + ')' : '') + '</h5>';
+                    html += '</div>';
+                    
+                    if (this.selectedTag) {
+                        const key = `${this.selectedMeasurement}:${this.selectedTag}`;
+                        const tagValues = this.influxTagValues[key] || [];
+                        
+                        // Search box for tag values
+                        html += '<div class="schema-search">';
+                        html += '<input type="text" id="tagValuesSearch" placeholder="Search values..." onkeyup="filterTagValues(this.value)">';
+                        html += '</div>';
+                        
+                        html += '<div class="schema-list" id="tagValuesList">';
+                        
+                        if (this.isLoadingTagValues) {
+                            html += '<div class="schema-loading">Loading tag values...</div>';
+                        } else if (tagValues.length === 0) {
+                            html += '<div class="schema-empty">No values found</div>';
+                        } else {
+                            for (const value of tagValues) {
+                                html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(this.selectedTag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
+                                html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
+                                html += '</div>';
+                            }
+                        }
+                        
+                        html += '</div>';
+                    } else {
+                        html += '<div class="schema-list">';
+                        html += '<div class="schema-empty">Select a tag to view values</div>';
+                        html += '</div>';
+                    }
+                    
+                    html += '</div>'; // End values panel
+                    
+                    html += '</div>'; // End container
                     html += '</div>';
                 }
             }
@@ -775,7 +785,7 @@ function insertTag(tag) {
     Schema.insertIntoQuery(tag);
 }
 
-function toggleTag(tag) {
+function selectTag(tag) {
     if (Schema.selectedTag === tag) {
         // If already selected, deselect
         Schema.selectedTag = null;
@@ -850,42 +860,39 @@ function filterInfluxTags(searchTerm) {
     } else {
         for (const tag of filteredTags) {
             const isSelected = Schema.selectedTag === tag;
-            const key = `${Schema.selectedMeasurement}:${tag}`;
-            const tagValues = Schema.influxTagValues[key] || [];
             
-            html += '<div class="schema-tag-wrapper">';
-            
-            // Tag item with expand/collapse icon
-            html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="toggleTag(\'' + Utils.escapeHtml(tag) + '\')">';
-            html += '<span class="schema-expand-icon">' + (isSelected ? '▼' : '▶') + '</span>';
+            html += '<div class="schema-item' + (isSelected ? ' selected' : '') + '" onclick="selectTag(\'' + Utils.escapeHtml(tag) + '\')">';
             html += '<span class="schema-item-name">' + Utils.escapeHtml(tag) + '</span>';
             html += '<span class="schema-item-type tag">tag</span>';
-            html += '</div>';
-            
-            // Tag values (shown when tag is selected)
-            if (isSelected) {
-                html += '<div class="schema-tag-values">';
-                
-                if (Schema.isLoadingTagValues) {
-                    html += '<div class="schema-loading">Loading tag values...</div>';
-                } else if (tagValues.length === 0) {
-                    html += '<div class="schema-empty">No values found</div>';
-                } else {
-                    for (const value of tagValues) {
-                        html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(tag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
-                        html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
-                        html += '</div>';
-                    }
-                }
-                
-                html += '</div>';
-            }
-            
             html += '</div>';
         }
     }
     
     tagsList.innerHTML = html;
+}
+
+function filterTagValues(searchTerm) {
+    const tagValuesList = document.getElementById('tagValuesList');
+    if (!tagValuesList || !Schema.selectedMeasurement || !Schema.selectedTag) return;
+    
+    const key = `${Schema.selectedMeasurement}:${Schema.selectedTag}`;
+    const tagValues = Schema.influxTagValues[key] || [];
+    const filteredValues = searchTerm ? 
+        tagValues.filter(value => value.toLowerCase().includes(searchTerm.toLowerCase())) : 
+        tagValues;
+    
+    let html = '';
+    if (filteredValues.length === 0) {
+        html = '<div class="schema-empty">No values found</div>';
+    } else {
+        for (const value of filteredValues) {
+            html += '<div class="schema-value-item" onclick="insertTagValue(\'' + Utils.escapeHtml(Schema.selectedTag) + '\', \'' + Utils.escapeHtml(value) + '\')">';
+            html += '<span class="schema-value-name">' + Utils.escapeHtml(value) + '</span>';
+            html += '</div>';
+        }
+    }
+    
+    tagValuesList.innerHTML = html;
 }
 
 function refreshSchema() {
