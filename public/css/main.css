@@ -1692,6 +1692,7 @@ pre {
 
 .schema-list {
     overflow-y: auto;
+    height: 180px;
     border: 1px solid #333;
     border-radius: 4px;
     background-color: #0a0a0a;
@@ -1811,6 +1812,7 @@ pre {
 .schema-tags-panel .schema-list,
 .schema-values-panel .schema-list {
     flex: 1;
+    height: auto;
     overflow-y: auto;
     border: none;
     border-radius: 0;
