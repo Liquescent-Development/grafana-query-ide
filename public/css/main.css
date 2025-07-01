@@ -1669,6 +1669,12 @@ pre {
     margin-bottom: 15px;
 }
 
+.schema-tags-panel .schema-search,
+.schema-values-panel .schema-search {
+    padding: 10px 12px;
+    margin-bottom: 0;
+}
+
 .schema-search input {
     width: 100%;
     padding: 8px 12px;
@@ -1686,7 +1692,6 @@ pre {
 
 .schema-list {
     overflow-y: auto;
-    height: 180px;
     border: 1px solid #333;
     border-radius: 4px;
     background-color: #0a0a0a;
@@ -1801,6 +1806,15 @@ pre {
     border: 1px solid #333;
     border-radius: 6px;
     overflow: hidden;
+}
+
+.schema-tags-panel .schema-list,
+.schema-values-panel .schema-list {
+    flex: 1;
+    overflow-y: auto;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
 }
 
 .schema-panel-header {
