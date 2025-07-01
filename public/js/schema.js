@@ -410,17 +410,39 @@ const Schema = {
                 const values = [];
                 const frames = tagValuesResult.results.A.frames || [];
                 
+                console.log('Processing frames for tag values:', frames.length);
+                
                 for (const frame of frames) {
+                    console.log('Frame structure:', {
+                        schema: frame.schema,
+                        data: frame.data
+                    });
+                    
                     if (!frame.data || !frame.data.values) continue;
                     
-                    // Tag values typically come in the second column (index 1)
-                    if (frame.data.values.length > 1 && Array.isArray(frame.data.values[1])) {
-                        const columnValues = frame.data.values[1];
-                        for (const value of columnValues) {
-                            if (value !== null && value !== undefined) {
-                                const stringValue = String(value);
-                                if (!values.includes(stringValue)) {
-                                    values.push(stringValue);
+                    // Log the shape of the data
+                    console.log('Frame data values length:', frame.data.values.length);
+                    console.log('Frame data values:', frame.data.values);
+                    
+                    // SHOW TAG VALUES returns results with the tag key in first column and value in second
+                    // But we should check all columns to be safe
+                    for (let i = 0; i < frame.data.values.length; i++) {
+                        const column = frame.data.values[i];
+                        if (Array.isArray(column)) {
+                            console.log(`Column ${i} values:`, column);
+                            
+                            // Skip the first column if it contains the tag name
+                            if (i === 0 && column.length > 0 && column[0] === tag) {
+                                continue;
+                            }
+                            
+                            // Extract values from this column
+                            for (const value of column) {
+                                if (value !== null && value !== undefined && value !== tag) {
+                                    const stringValue = String(value);
+                                    if (!values.includes(stringValue)) {
+                                        values.push(stringValue);
+                                    }
                                 }
                             }
                         }
