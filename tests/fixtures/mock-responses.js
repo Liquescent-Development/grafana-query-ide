@@ -367,13 +367,71 @@
         }
     };
 
+    // Modern InfluxDB responses using new /api/ds/query endpoint with Grafana frames format
+    const modernInfluxDBResponses = {
+        'POST /api/ds/query': {
+            status: 200,
+            data: {
+                results: {
+                    A: {
+                        frames: [{
+                            schema: {
+                                refId: 'A',
+                                meta: { 
+                                    type: 'table',
+                                    custom: { query: 'SHOW RETENTION POLICIES' }
+                                },
+                                fields: [
+                                    { name: 'name', type: 'string' }
+                                ]
+                            },
+                            data: {
+                                values: [
+                                    ['autogen', '7d', '30d', '1y']
+                                ]
+                            }
+                        }]
+                    }
+                }
+            }
+        },
+
+        'POST /api/api/ds/query': {
+            status: 200,
+            data: {
+                results: {
+                    A: {
+                        frames: [{
+                            schema: {
+                                refId: 'A',
+                                meta: { 
+                                    type: 'table',
+                                    custom: { query: 'SHOW MEASUREMENTS' }
+                                },
+                                fields: [
+                                    { name: 'name', type: 'string' }
+                                ]
+                            },
+                            data: {
+                                values: [
+                                    ['cpu_usage', 'memory_usage', 'disk_io', 'network_traffic', 'http_requests', 'response_time', 'error_rate']
+                                ]
+                            }
+                        }]
+                    }
+                }
+            }
+        }
+    };
+
     // Combine all responses into the global registry
     Object.assign(MockResponses, 
         influxDBResponses,
         prometheusResponses,
         datasourceResponses,
         errorResponses,
-        electronResponses
+        electronResponses,
+        modernInfluxDBResponses
     );
 
     // Helper function to create dynamic responses based on query content
@@ -393,17 +451,60 @@
     function createInfluxDBMockResponse(query) {
         const lowerQuery = query.toLowerCase();
         
+        if (lowerQuery.includes('show retention policies')) {
+            return {
+                status: 200,
+                data: {
+                    results: {
+                        A: {
+                            frames: [{
+                                schema: {
+                                    refId: 'A',
+                                    meta: { 
+                                        type: 'table',
+                                        custom: { query: query }
+                                    },
+                                    fields: [
+                                        { name: 'name', type: 'string' }
+                                    ]
+                                },
+                                data: {
+                                    values: [
+                                        ['autogen', '7d', '30d', '1y']
+                                    ]
+                                }
+                            }]
+                        }
+                    }
+                }
+            };
+        }
+        
         if (lowerQuery.includes('show databases')) {
             return {
                 status: 200,
                 data: {
-                    results: [{
-                        series: [{
-                            name: "databases",
-                            columns: ["name"],
-                            values: [["telegraf"], ["_internal"], ["test_db"]]
-                        }]
-                    }]
+                    results: {
+                        A: {
+                            frames: [{
+                                schema: {
+                                    refId: 'A',
+                                    meta: { 
+                                        type: 'table',
+                                        custom: { query: query }
+                                    },
+                                    fields: [
+                                        { name: 'name', type: 'string' }
+                                    ]
+                                },
+                                data: {
+                                    values: [
+                                        ['telegraf', '_internal', 'test_db']
+                                    ]
+                                }
+                            }]
+                        }
+                    }
                 }
             };
         }
@@ -412,31 +513,64 @@
             return {
                 status: 200,
                 data: {
-                    results: [{
-                        series: [{
-                            name: "measurements",
-                            columns: ["name"],
-                            values: [["cpu"], ["memory"], ["disk"]]
-                        }]
-                    }]
+                    results: {
+                        A: {
+                            frames: [{
+                                schema: {
+                                    refId: 'A',
+                                    meta: { 
+                                        type: 'table',
+                                        custom: { query: query }
+                                    },
+                                    fields: [
+                                        { name: 'name', type: 'string' }
+                                    ]
+                                },
+                                data: {
+                                    values: [
+                                        ['cpu_usage', 'memory_usage', 'disk_io', 'network_traffic', 'http_requests', 'response_time', 'error_rate']
+                                    ]
+                                }
+                            }]
+                        }
+                    }
                 }
             };
         }
         
         if (lowerQuery.includes('show field keys')) {
+            const measurement = query.match(/from\s+"?(\w+)"?/i)?.[1] || 'cpu_usage';
+            const fieldKeys = {
+                cpu_usage: ['usage_idle', 'usage_system', 'usage_user', 'usage_iowait'],
+                memory_usage: ['used', 'free', 'cached', 'available'],
+                disk_io: ['read_bytes', 'write_bytes', 'read_time', 'write_time'],
+                network_traffic: ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']
+            };
+            
             return {
                 status: 200,
                 data: {
-                    results: [{
-                        series: [{
-                            name: "cpu",
-                            columns: ["fieldKey", "fieldType"],
-                            values: [
-                                ["usage_active", "float"],
-                                ["usage_idle", "float"]
-                            ]
-                        }]
-                    }]
+                    results: {
+                        A: {
+                            frames: [{
+                                schema: {
+                                    refId: 'A',
+                                    meta: { 
+                                        type: 'table',
+                                        custom: { query: query }
+                                    },
+                                    fields: [
+                                        { name: 'fieldKey', type: 'string' }
+                                    ]
+                                },
+                                data: {
+                                    values: [
+                                        fieldKeys[measurement] || ['value']
+                                    ]
+                                }
+                            }]
+                        }
+                    }
                 }
             };
         }

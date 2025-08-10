@@ -551,10 +551,13 @@ function onSchemaDatasourceChange() {
     const select = document.getElementById('schemaDatasourceSelect');
     if (!select || !select.value) return;
     
-    // Find the datasource item and simulate a click
-    const datasourceItem = document.querySelector(`[data-uid="${select.value}"]`);
-    if (datasourceItem) {
-        datasourceItem.click();
+    // Get the selected option details
+    const selectedOption = select.selectedOptions[0];
+    if (selectedOption && window.Schema) {
+        // Set the current datasource info and trigger schema loading
+        Schema.currentDatasourceId = selectedOption.value;
+        Schema.currentDatasourceType = selectedOption.dataset.type;
+        Schema.loadSchemaIfNeeded();
     }
 }
 

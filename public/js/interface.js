@@ -1446,6 +1446,7 @@ const Interface = {
             const option = document.createElement('option');
             option.value = item.dataset.uid;
             option.textContent = item.dataset.name || item.querySelector('div[style*="font-weight: 500"]')?.textContent || 'Unknown';
+            option.dataset.type = item.dataset.type; // Add the data-type attribute
             
             // Select current datasource if it matches (use selectedDatasourceUid as the default)
             if (item.dataset.uid === GrafanaConfig.currentDatasourceId || 
@@ -1482,6 +1483,7 @@ const Interface = {
                 const option = document.createElement('option');
                 option.value = ds.uid;
                 option.textContent = ds.name;
+                option.dataset.type = ds.type; // Add the data-type attribute
                 
                 if (ds.uid === GrafanaConfig.currentDatasourceId) {
                     option.selected = true;

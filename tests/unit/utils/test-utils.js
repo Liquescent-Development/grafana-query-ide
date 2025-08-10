@@ -117,6 +117,38 @@
                 const method = options.method || 'GET';
                 const key = `${method} ${url}`;
                 
+                // Special handling for schema queries to /api/ds/query endpoint
+                if (method === 'POST' && url.endsWith('/api/ds/query') && options.body) {
+                    try {
+                        const requestBody = JSON.parse(options.body);
+                        if (requestBody.queries && requestBody.queries.length > 0) {
+                            const query = requestBody.queries[0];
+                            const queryText = query.rawQuery || query.query || query.expr || '';
+                            
+                            if (queryText && typeof queryText === 'string') {
+                                const lowerQuery = queryText.toLowerCase();
+                                if (lowerQuery.includes('show ')) {
+                                    // This is a schema query, use dynamic response
+                                    console.log('🔍 Mock detected schema query:', queryText);
+                                    const dynamicResponse = (global_scope.createMockResponse || global.createMockResponse)?.(queryText, 'influxdb');
+                                    if (dynamicResponse) {
+                                        console.log('📊 Mock returning dynamic response for schema query');
+                                        return {
+                                            ok: true,
+                                            status: dynamicResponse.status || 200,
+                                            statusText: 'OK',
+                                            json: async () => dynamicResponse.data,
+                                            headers: new Map()
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Mock fetch: Error parsing request body for schema detection:', e);
+                    }
+                }
+                
                 if (responses && responses[key]) {
                     const response = responses[key];
                     

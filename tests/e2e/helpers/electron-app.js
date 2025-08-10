@@ -1,7 +1,7 @@
 // Helper to launch and control the Electron app for testing
 const { _electron: electron } = require('playwright');
 const path = require('path');
-const MockServer = require('../mocks/mock-server');
+const EnhancedMockServer = require('../mocks/enhanced-mock-server');
 
 class ElectronApp {
   constructor() {
@@ -13,7 +13,7 @@ class ElectronApp {
   async launch(options = {}) {
     // Start mock server if enabled
     if (!options.skipMockServer) {
-      this.mockServer = new MockServer(3001);
+      this.mockServer = new EnhancedMockServer(3001);
       await this.mockServer.start();
     }
     
@@ -66,25 +66,31 @@ class ElectronApp {
   
   // Helper to connect to mock Grafana
   async connectToMockGrafana() {
-    // Open connection dialog
-    await this.click('button[onclick*="showNewConnectionDialog"]');
+    // Check if there's already a connection dialog open and handle password input
+    const passwordDialog = await this.window.$('input[placeholder="Enter password..."]');
+    if (passwordDialog) {
+      await passwordDialog.fill('admin');
+      await this.click('button:has-text("Connect")');
+      await this.window.waitForTimeout(2000);
+      return;
+    }
     
-    // Fill in mock server credentials
-    await this.type('#connectionName', 'Test Grafana');
-    await this.type('#connectionUrl', 'http://localhost:3001');
-    await this.type('#connectionUsername', 'admin');
-    await this.type('#connectionPassword', 'admin');
-    
-    // Save and connect
-    await this.click('#saveConnectionBtn');
-    
-    // Wait for connection to complete
-    await this.window.waitForTimeout(1000);
-    
-    // Click connect on the saved connection
-    const connectionItem = await this.window.$('.connection-item');
-    if (connectionItem) {
-      await connectionItem.click();
+    // Otherwise create new connection if needed
+    const newConnectionBtn = await this.window.$('button[onclick*="showNewConnectionDialog"]');
+    if (newConnectionBtn && await newConnectionBtn.isVisible()) {
+      await newConnectionBtn.click();
+      
+      // Fill in mock server credentials
+      await this.type('#connectionName', 'Test Grafana');
+      await this.type('#connectionUrl', 'http://localhost:3001');
+      await this.type('#connectionUsername', 'admin');
+      await this.type('#connectionPassword', 'admin');
+      
+      // Save and connect
+      await this.click('#connectionDialog .modal-footer .primary-button'); // "Save & Connect" button
+      
+      // Wait for connection to complete
+      await this.window.waitForTimeout(2000);
     }
   }
   
@@ -99,16 +105,16 @@ class ElectronApp {
     if (provider === 'ollama') {
       await this.window.selectOption('#aiProvider', 'ollama');
       await this.type('#aiConnectionName', 'Test Ollama');
-      await this.type('#ollamaEndpoint', 'http://localhost:3001');
-      await this.window.selectOption('#ollamaModel', 'llama3.1:8b');
+      await this.type('#aiEndpoint', 'http://localhost:3001');
+      await this.window.selectOption('#aiModel', 'llama3.1:8b');
     } else {
       await this.window.selectOption('#aiProvider', 'openai');
       await this.type('#aiConnectionName', 'Test OpenAI');
-      await this.type('#openaiApiKey', 'test-api-key-123');
+      await this.type('#aiApiKey', 'test-api-key-123');
     }
     
     // Save connection
-    await this.click('#saveAiConnectionBtn');
+    await this.click('.modal-footer .primary-button'); // "Save & Connect" button
     
     // Wait and connect
     await this.window.waitForTimeout(1000);

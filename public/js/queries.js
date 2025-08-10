@@ -43,6 +43,9 @@ const Queries = {
         
         Utils.showResults('Executing query...', 'loading');
         
+        // Track execution timing
+        const executionStartTime = Date.now();
+        
         try {
             // Handle database resolution for InfluxDB queries
             let database = null;
@@ -63,9 +66,15 @@ const Queries = {
                 database: database
             });
             
+            // Calculate execution time
+            const executionTime = Date.now() - executionStartTime;
+            
             // The result from /api/ds/query should already have the format: { results: { A: {...} } }
             // where A is the refId of our query
             const data = result;
+            
+            // Add execution timing to the data for display
+            data.executionTime = executionTime;
             
             console.log('Response data:', data);
             GrafanaConfig.currentResults = data;
@@ -157,6 +166,13 @@ const Queries = {
         
         if (frameToDisplay && frameToDisplay.schema && frameToDisplay.schema.fields && frameToDisplay.data && frameToDisplay.data.values) {
             html += '<h3>Results</h3>';
+            
+            // Add query execution timing if available
+            if (data.executionTime) {
+                html += '<div class="query-timing execution-time" style="color: #cccccc; font-size: 12px; margin-bottom: 10px;">';
+                html += 'Query executed in ' + data.executionTime + 'ms';
+                html += '</div>';
+            }
             
             // Removed redundant executed query display since it's visible in the editor
             
@@ -253,9 +269,10 @@ const Queries = {
             html += '<tr>';
             frameToDisplay.data.values.forEach(function(column, colIndex) {
                 let value = column[i];
+                const field = frameToDisplay.schema.fields[colIndex];
                 
                 // Format time values
-                if (frameToDisplay.schema.fields[colIndex].type === 'time') {
+                if (field.type === 'time') {
                     value = Utils.formatTimeValue(value);
                 }
                 
@@ -264,7 +281,19 @@ const Queries = {
                     value = Utils.formatNumberValue(value);
                 }
                 
-                html += '<td>' + (value !== null && value !== undefined ? value : 'null') + '</td>';
+                // For Prometheus data, append labels to the value
+                let displayValue = (value !== null && value !== undefined ? value : 'null');
+                if (field.labels && Object.keys(field.labels).length > 0) {
+                    const labels = Object.entries(field.labels)
+                        .filter(([key, val]) => key !== '__name__') // Skip the metric name
+                        .map(([key, val]) => `${key}=${val}`)
+                        .join(', ');
+                    if (labels) {
+                        displayValue += ` {${labels}}`;
+                    }
+                }
+                
+                html += '<td>' + displayValue + '</td>';
             });
             html += '</tr>';
         }

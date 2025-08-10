@@ -131,6 +131,9 @@ class EnhancedMockServer {
     
     // Query execution endpoint
     this.app.post('/api/ds/query', (req, res) => {
+      console.log('🚀 Mock server: Received /api/ds/query request');
+      console.log('📝 Query request body:', JSON.stringify(req.body, null, 2));
+      console.log('📝 Request headers:', JSON.stringify(req.headers, null, 2));
       const { queries, from, to, scopedVars } = req.body;
       
       if (!queries || queries.length === 0) {
@@ -152,7 +155,10 @@ class EnhancedMockServer {
       queries.forEach((query, idx) => {
         const refId = query.refId || String.fromCharCode(65 + idx); // A, B, C...
         
+        console.log(`🔍 Query datasourceId: "${query.datasourceId}", contains prom: ${query.datasourceId?.includes('prom')}`);
+        
         if (query.datasourceId?.includes('prom')) {
+          console.log('📊 Mock server: Routing to Prometheus response');
           // Prometheus response
           results[refId] = {
             frames: [{
@@ -176,30 +182,133 @@ class EnhancedMockServer {
             }]
           };
         } else {
+          console.log('📊 Mock server: Routing to InfluxDB response');
           // InfluxDB response
-          results[refId] = {
-            frames: [{
-              schema: {
-                refId,
-                meta: { 
-                  type: 'timeseries',
-                  custom: { query: query.rawQuery }
+          const influxQuery = query.rawQuery || query.query || query.expr || '';
+          console.log('🔍 Mock server processing InfluxDB query:', influxQuery);
+          
+          // Handle InfluxDB schema queries
+          if (typeof influxQuery === 'string' && influxQuery.includes('SHOW RETENTION POLICIES')) {
+            console.log('📊 Mock server: Detected SHOW RETENTION POLICIES query');
+            results[refId] = {
+              frames: [{
+                schema: {
+                  refId,
+                  meta: { 
+                    type: 'table',
+                    custom: { query: influxQuery }
+                  },
+                  fields: [
+                    { name: 'name', type: 'string' }
+                  ]
                 },
-                fields: [
-                  { name: 'time', type: 'time', typeInfo: { frame: 'time.Time' } },
-                  { name: 'value', type: 'number' },
-                  { name: 'host', type: 'string' }
-                ]
-              },
-              data: {
-                values: [
-                  this.generateTimeArray(from, to, 60000),
-                  this.generateRandomValues(20, 30, 80),
-                  Array(20).fill('server-1')
-                ]
-              }
-            }]
-          };
+                data: {
+                  values: [
+                    ['autogen', '7d', '30d', '1y']
+                  ]
+                }
+              }]
+            };
+          }
+          else if (typeof influxQuery === 'string' && influxQuery.includes('SHOW MEASUREMENTS')) {
+            console.log('📊 Mock server: Detected SHOW MEASUREMENTS query');
+            results[refId] = {
+              frames: [{
+                schema: {
+                  refId,
+                  meta: { 
+                    type: 'table',
+                    custom: { query: influxQuery }
+                  },
+                  fields: [
+                    { name: 'name', type: 'string' }
+                  ]
+                },
+                data: {
+                  values: [
+                    ['cpu_usage', 'memory_usage', 'disk_io', 'network_traffic', 'http_requests', 'response_time', 'error_rate']
+                  ]
+                }
+              }]
+            };
+          }
+          else if (typeof influxQuery === 'string' && influxQuery.includes('SHOW FIELD KEYS')) {
+            const measurement = influxQuery.match(/FROM\s+"?(\w+)"?/i)?.[1] || 'cpu_usage';
+            
+            const fieldKeys = {
+              cpu_usage: ['usage_idle', 'usage_system', 'usage_user', 'usage_iowait'],
+              memory_usage: ['used', 'free', 'cached', 'available'],
+              disk_io: ['read_bytes', 'write_bytes', 'read_time', 'write_time'],
+              network_traffic: ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']
+            };
+            
+            results[refId] = {
+              frames: [{
+                schema: {
+                  refId,
+                  meta: { 
+                    type: 'table',
+                    custom: { query: influxQuery }
+                  },
+                  fields: [
+                    { name: 'fieldKey', type: 'string' }
+                  ]
+                },
+                data: {
+                  values: [
+                    fieldKeys[measurement] || ['value']
+                  ]
+                }
+              }]
+            };
+          }
+          else if (typeof influxQuery === 'string' && influxQuery.includes('SHOW TAG KEYS')) {
+            results[refId] = {
+              frames: [{
+                schema: {
+                  refId,
+                  meta: { 
+                    type: 'table',
+                    custom: { query: influxQuery }
+                  },
+                  fields: [
+                    { name: 'tagKey', type: 'string' }
+                  ]
+                },
+                data: {
+                  values: [
+                    ['host', 'region', 'datacenter', 'environment', 'service', 'cluster']
+                  ]
+                }
+              }]
+            };
+          }
+          else {
+            // Regular data query response
+            results[refId] = {
+              frames: [{
+                schema: {
+                  refId,
+                  meta: { 
+                    type: 'timeseries',
+                    custom: { query: influxQuery }
+                  },
+                  fields: [
+                    { name: 'time', type: 'time', typeInfo: { frame: 'time.Time' } },
+                    { name: 'value', type: 'number' },
+                    { name: 'host', type: 'string' }
+                  ]
+                },
+                data: {
+                  values: [
+                    this.generateTimeArray(from, to, 60000),
+                    this.generateRandomValues(20, 30, 80),
+                    Array(20).fill('server-1')
+                  ]
+                }
+              }]
+            };
+          }
         }
       });
       
