@@ -17,12 +17,14 @@ class ElectronApp {
       await this.mockServer.start();
     }
     
-    // Launch Electron app
+    // Launch Electron app with isolated test data directory
+    const userDataDir = path.join(__dirname, '../../../.test-data');
     this.app = await electron.launch({
       args: [
         path.join(__dirname, '../../../main.js'),
         '--no-sandbox', // Required for CI environments
         '--disable-dev-shm-usage', // Overcome limited resource problems
+        `--user-data-dir=${userDataDir}`, // Isolate test data from dev environment
       ],
       env: {
         ...process.env,
@@ -40,6 +42,9 @@ class ElectronApp {
     // Wait for app to be ready
     await this.window.waitForLoadState('domcontentloaded');
     
+    // Clear any test data from previous runs to avoid polluting dev environment
+    await this.clearTestData();
+    
     // Enable console logging in tests
     this.window.on('console', msg => {
       if (process.env.DEBUG_TESTS) {
@@ -50,7 +55,43 @@ class ElectronApp {
     return this;
   }
 
+  async clearTestData() {
+    // Clear test connections from localStorage
+    await this.window.evaluate(() => {
+      // Only clear test-related data, not user's actual configurations
+      const connections = JSON.parse(localStorage.getItem('grafanaConnections') || '[]');
+      const aiConnections = JSON.parse(localStorage.getItem('AI_CONNECTIONS') || '[]');
+      
+      // Filter out test connections (those pointing to localhost:3001 mock server)
+      const filteredConnections = connections.filter(conn => 
+        !conn.url?.includes('localhost:3001') && !conn.name?.includes('Test ')
+      );
+      const filteredAiConnections = aiConnections.filter(conn => 
+        !conn.endpoint?.includes('localhost:3001') && !conn.name?.includes('Test ')
+      );
+      
+      // Only update if we actually removed test data
+      if (filteredConnections.length !== connections.length) {
+        localStorage.setItem('grafanaConnections', JSON.stringify(filteredConnections));
+      }
+      if (filteredAiConnections.length !== aiConnections.length) {
+        localStorage.setItem('AI_CONNECTIONS', JSON.stringify(filteredAiConnections));
+      }
+      
+      // Clear any active test connections
+      const activeConnection = localStorage.getItem('ACTIVE_AI_CONNECTION');
+      if (activeConnection && activeConnection.includes('test')) {
+        localStorage.removeItem('ACTIVE_AI_CONNECTION');
+      }
+    });
+  }
+
   async close() {
+    // Clean up test data before closing
+    if (this.window) {
+      await this.clearTestData();
+    }
+    
     if (this.app) {
       await this.app.close();
       this.app = null;
