@@ -614,61 +614,16 @@ Keep it concise and actionable.`;
     }
 }
 
-// Initialize the advanced AI system when the page loads
-document.addEventListener('DOMContentLoaded', async () => {
-    // Wait for core systems to be ready
-    setTimeout(async () => {
-        try {
-            // Only initialize if we have AI services connected
-            if (window.Analytics?.isConnected || window.OllamaService?.isConnected || window.OpenAIService?.isConnected) {
-                // Clear any existing interval to prevent duplicate initialization
-                if (window.advancedAICheckInterval) {
-                    clearInterval(window.advancedAICheckInterval);
-                    window.advancedAICheckInterval = null;
-                }
-                
-                // Create single instance - don't create multiple!
-                if (!window.AdvancedAI) {
-                    window.AdvancedAI = new AdvancedAIIntegration();
-                }
-                await window.AdvancedAI.initialize();
-            } else {
-                console.log('⏳ Advanced AI waiting for AI service connection...');
-                
-                // Watch for AI service connection
-                window.advancedAICheckInterval = setInterval(async () => {
-                    const isAnalyticsConnected = window.Analytics?.isConnected || false;
-                    const isOllamaConnected = window.OllamaService?.isConnected || false;
-                    const isOpenAIConnected = window.OpenAIService?.isConnected || false;
-                    const anyAIConnected = isAnalyticsConnected || isOllamaConnected || isOpenAIConnected;
-                    
-                    if (anyAIConnected) {
-                        clearInterval(window.advancedAICheckInterval);
-                        window.advancedAICheckInterval = null;
-                        
-                        // Only initialize if not already done or in progress
-                        if (!window.advancedAIInitializing && !window.AdvancedAI?.isInitialized) {
-                            console.log('🔍 AI service detected via interval check, initializing Advanced AI...');
-                            await window.initializeAdvancedAIWhenReady();
-                        } else {
-                            console.log('⏭️ AI detected but Advanced AI already initialized or in progress');
-                        }
-                    }
-                }, 2000);
-                
-                // Stop checking after 2 minutes
-                setTimeout(() => {
-                    if (window.advancedAICheckInterval) {
-                        clearInterval(window.advancedAICheckInterval);
-                        window.advancedAICheckInterval = null;
-                        console.log('⏰ Advanced AI initialization timeout - will initialize when AI service connects');
-                    }
-                }, 120000);
-            }
-        } catch (error) {
-            console.error('Failed to create Advanced AI system:', error);
-        }
-    }, 3000); // Wait 3 seconds for other systems to initialize
+// Advanced AI initialization is now triggered manually when AI services connect
+// We do NOT automatically check for connections or initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📦 Advanced AI Integration module loaded - waiting for manual initialization');
+    
+    // Create the class instance but don't initialize it
+    if (!window.AdvancedAI) {
+        window.AdvancedAI = new AdvancedAIIntegration();
+        console.log('✅ AdvancedAI instance created (not initialized)');
+    }
 });
 
 // Track initialization state to prevent duplicates

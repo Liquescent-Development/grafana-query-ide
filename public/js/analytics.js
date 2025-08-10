@@ -38,6 +38,8 @@ const Analytics = {
     // Initialize the analytics system
     initialize() {
         console.log('🤖 Initializing Analytics system...');
+        // Ensure we start disconnected until proven otherwise
+        this.isConnected = false;
         this.setupEventListeners();
         this.loadConfiguration();
         this.updateUI();
@@ -415,10 +417,9 @@ const Analytics = {
             this.loadTagsForField(this.config.measurement, this.config.field);
         }
         
-        // Check for existing AI connections
-        this.checkAiConnection().catch(error => {
-            console.warn('Failed to check AI connections:', error);
-        });
+        // Don't automatically check for AI connections on startup
+        // AI connections should only happen when user explicitly connects
+        console.log('💡 AI connections ready - user can connect via AI Connections panel');
         
         // Force load AI connections UI
         setTimeout(() => {
@@ -488,23 +489,34 @@ const Analytics = {
             this.config.activeConnectionName = connection.name;
             this.config.activeConnectionId = connection.id;
             
-            // Initialize the appropriate service
+            // Initialize the appropriate service and check result
+            let initResult = false;
             if (connection.provider === 'openai') {
                 this.config.openaiApiKey = connection.apiKey;
-                await OpenAIService.initialize(connection.apiKey, connection.model);
+                initResult = await OpenAIService.initialize(connection.apiKey, connection.model);
             } else {
                 this.config.ollamaEndpoint = connection.endpoint;
-                await OllamaService.initialize(connection.endpoint, connection.model);
+                initResult = await OllamaService.initialize(connection.endpoint, connection.model);
             }
             
-            this.isConnected = true;
-            console.log('✅ AI service initialized:', connection.name, connection.provider === 'openai' ? '(OpenAI)' : `at ${connection.endpoint}`);
+            // Only set connected if initialization actually succeeded
+            if (initResult === true) {
+                this.isConnected = true;
+                console.log('✅ AI service initialized:', connection.name, connection.provider === 'openai' ? '(OpenAI)' : `at ${connection.endpoint}`);
+            } else {
+                this.isConnected = false;
+                console.warn('⚠️ AI service initialization returned false for:', connection.name);
+            }
+            
             this.updateTitleBarStatus();
             this.updateAnalysisButton();
-            return true;
+            return initResult;
             
         } catch (error) {
             console.warn('⚠️ Failed to initialize AI connection:', connection.name, error.message);
+            
+            // Ensure Analytics is marked as disconnected
+            this.isConnected = false;
             
             // Update connection status to disconnected since it failed
             const aiConnections = Storage.getAiConnections();
@@ -521,7 +533,6 @@ const Analytics = {
                 }, 100);
             }
             
-            this.isConnected = false;
             this.updateTitleBarStatus();
             this.updateAnalysisButton();
             return false;

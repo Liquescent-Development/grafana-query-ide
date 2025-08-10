@@ -76,39 +76,21 @@ const App = {
         this.loadSavedConnections();
         
         // Update AI status after a delay to ensure services are loaded
-        setTimeout(async () => {
-            // Try to restore active AI connection
-            const activeConnectionId = Storage && Storage.get ? Storage.get('ACTIVE_AI_CONNECTION') : null;
-            if (activeConnectionId && Storage && Storage.getAiConnections) {
-                const aiConnections = Storage.getAiConnections();
-                const activeConnection = aiConnections.find(conn => conn.id === activeConnectionId);
-                if (activeConnection) {
-                    console.log('🔄 Restoring AI connection:', activeConnection.name);
-                    try {
-                        // Initialize the appropriate service
-                        if (activeConnection.provider === 'openai') {
-                            if (window.OpenAIService && window.OpenAIService.initialize) {
-                                await OpenAIService.initialize(activeConnection.apiKey, activeConnection.model);
-                                console.log('✅ OpenAI connection restored');
-                            }
-                        } else {
-                            if (window.OllamaService && window.OllamaService.initialize) {
-                                await OllamaService.initialize(activeConnection.endpoint, activeConnection.model);
-                                console.log('✅ Ollama connection restored');
-                            }
-                        }
-                    } catch (error) {
-                        console.error('❌ Failed to restore AI connection:', error);
-                        if (Storage && Storage.remove) {
-                            Storage.remove('ACTIVE_AI_CONNECTION');
-                        }
-                    }
-                }
-            }
-            
-            // Update title bar status
+        // NOTE: We do NOT automatically restore AI connections on startup
+        // AI connections should only be made when user explicitly connects
+        setTimeout(() => {
+            // Just update the title bar to show disconnected state
             if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
                 window.Analytics.updateTitleBarStatus();
+            }
+            
+            // Clear any stale ACTIVE_AI_CONNECTION from storage
+            if (Storage && Storage.remove) {
+                const activeConnectionId = Storage && Storage.get ? Storage.get('ACTIVE_AI_CONNECTION') : null;
+                if (activeConnectionId) {
+                    console.log('🧹 Clearing stale active AI connection from storage');
+                    Storage.remove('ACTIVE_AI_CONNECTION');
+                }
             }
         }, 1000);
     },
@@ -651,32 +633,9 @@ window.onload = function() {
         FileExplorer.initialize();
     }
     
-    // Initialize Advanced AI System after a short delay
-    setTimeout(async () => {
-        console.log('🤖 Checking AI service connection for Advanced AI initialization...');
-        
-        // Check if AI service is connected
-        const aiConnected = (window.OpenAIService && window.OpenAIService.isConnected) || 
-                          (window.OllamaService && window.OllamaService.isConnected);
-        
-        if (aiConnected) {
-            console.log('✅ AI service connected, initializing Advanced AI System...');
-            
-            // Initialize advanced AI if not already done
-            if (!window.AdvancedAI) {
-                window.AdvancedAI = new AdvancedAIIntegration();
-            }
-            
-            try {
-                await window.AdvancedAI.initialize();
-                console.log('🚀 Advanced AI System initialized successfully');
-            } catch (error) {
-                console.error('❌ Failed to initialize Advanced AI:', error);
-            }
-        } else {
-            console.log('⏳ AI service not connected. Advanced AI will initialize when service connects.');
-        }
-    }, 2000);
+    // Advanced AI System will be initialized when user connects to an AI service
+    // We do NOT automatically initialize it on startup
+    console.log('💡 Advanced AI System ready - will initialize when AI service is connected by user');
     
     // Expose debug functions to global scope for console access
     window.debugStorage = Storage.debugLocalStorage.bind(Storage);
