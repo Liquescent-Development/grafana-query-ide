@@ -42,13 +42,62 @@ npm run test:e2e:report
 ```
 tests/e2e/
 ├── helpers/
-│   └── electron-app.js       # Helper class for Electron app control
-├── connection.e2e.spec.js    # Connection management tests
-├── query-editor.e2e.spec.js  # Query editor functionality tests
-├── navigation.e2e.spec.js    # Navigation and UI tests
-├── reports/                   # Test reports (generated)
-├── screenshots/               # Test screenshots (generated)
-└── test-results/             # Test artifacts (generated)
+│   └── electron-app.js              # Helper class for Electron app control
+├── mocks/
+│   └── mock-server.js               # Mock Grafana/AI server for testing
+├── connection.e2e.spec.js           # Connection management tests (UI only)
+├── query-editor.e2e.spec.js         # Query editor functionality tests (UI only)
+├── navigation.e2e.spec.js           # Navigation and UI tests (UI only)
+├── query-execution.integration.spec.js # Integration tests with mock server
+├── reports/                         # Test reports (generated)
+├── screenshots/                     # Test screenshots (generated)
+└── test-results/                    # Test artifacts (generated)
+```
+
+## Mock Server
+
+The E2E tests use a mock server that simulates Grafana and AI services. This allows tests to:
+- Run without real Grafana or AI services
+- Work consistently in CI/CD pipelines
+- Test full query execution flow
+- Validate data visualization
+
+### Mock Server Features
+
+The mock server (`mocks/mock-server.js`) provides:
+
+**Grafana API Endpoints:**
+- `/api/user` - Authentication with test credentials (admin/admin)
+- `/api/datasources` - Returns mock InfluxDB and Prometheus datasources
+- `/api/ds/query` - Simulates query execution with mock data
+- `/api/datasources/proxy/:id/query` - Schema queries (SHOW DATABASES, etc.)
+- `/api/search` - Dashboard search results
+
+**AI Service Endpoints:**
+- `/api/tags` - Ollama model list
+- `/api/generate` - Ollama text generation
+- `/v1/chat/completions` - OpenAI-compatible chat API
+
+### Using the Mock Server
+
+The mock server starts automatically when running E2E tests. To disable it:
+
+```javascript
+test('my test without mock', async () => {
+  const app = new ElectronApp();
+  await app.launch({ skipMockServer: true });
+  // Test code
+});
+```
+
+### Helper Methods for Mock Connections
+
+```javascript
+// Connect to mock Grafana
+await app.connectToMockGrafana();
+
+// Connect to mock AI service
+await app.connectToMockAI('ollama'); // or 'openai'
 ```
 
 ## Test Categories

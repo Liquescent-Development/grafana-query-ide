@@ -1,14 +1,22 @@
 // Helper to launch and control the Electron app for testing
 const { _electron: electron } = require('playwright');
 const path = require('path');
+const MockServer = require('../mocks/mock-server');
 
 class ElectronApp {
   constructor() {
     this.app = null;
     this.window = null;
+    this.mockServer = null;
   }
 
   async launch(options = {}) {
+    // Start mock server if enabled
+    if (!options.skipMockServer) {
+      this.mockServer = new MockServer(3001);
+      await this.mockServer.start();
+    }
+    
     // Launch Electron app
     this.app = await electron.launch({
       args: [
@@ -20,6 +28,8 @@ class ElectronApp {
         ...process.env,
         NODE_ENV: 'test',
         ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+        // Point to mock server for testing
+        TEST_MOCK_SERVER: options.skipMockServer ? '' : 'http://localhost:3001',
       },
       ...options
     });
@@ -45,6 +55,66 @@ class ElectronApp {
       await this.app.close();
       this.app = null;
       this.window = null;
+    }
+    
+    // Stop mock server if running
+    if (this.mockServer) {
+      await this.mockServer.stop();
+      this.mockServer = null;
+    }
+  }
+  
+  // Helper to connect to mock Grafana
+  async connectToMockGrafana() {
+    // Open connection dialog
+    await this.click('button[onclick*="showNewConnectionDialog"]');
+    
+    // Fill in mock server credentials
+    await this.type('#connectionName', 'Test Grafana');
+    await this.type('#connectionUrl', 'http://localhost:3001');
+    await this.type('#connectionUsername', 'admin');
+    await this.type('#connectionPassword', 'admin');
+    
+    // Save and connect
+    await this.click('#saveConnectionBtn');
+    
+    // Wait for connection to complete
+    await this.window.waitForTimeout(1000);
+    
+    // Click connect on the saved connection
+    const connectionItem = await this.window.$('.connection-item');
+    if (connectionItem) {
+      await connectionItem.click();
+    }
+  }
+  
+  // Helper to connect to mock AI service
+  async connectToMockAI(provider = 'ollama') {
+    // Switch to agent view
+    await this.click('[data-view="agent"]');
+    
+    // Open AI connection dialog
+    await this.click('button[onclick*="showNewAiConnectionDialog"]');
+    
+    if (provider === 'ollama') {
+      await this.window.selectOption('#aiProvider', 'ollama');
+      await this.type('#aiConnectionName', 'Test Ollama');
+      await this.type('#ollamaEndpoint', 'http://localhost:3001');
+      await this.window.selectOption('#ollamaModel', 'llama3.1:8b');
+    } else {
+      await this.window.selectOption('#aiProvider', 'openai');
+      await this.type('#aiConnectionName', 'Test OpenAI');
+      await this.type('#openaiApiKey', 'test-api-key-123');
+    }
+    
+    // Save connection
+    await this.click('#saveAiConnectionBtn');
+    
+    // Wait and connect
+    await this.window.waitForTimeout(1000);
+    const aiConnectionItem = await this.window.$('.ai-connection-item');
+    if (aiConnectionItem) {
+      await aiConnectionItem.click();
     }
   }
 
