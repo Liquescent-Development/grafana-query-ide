@@ -2975,6 +2975,45 @@ Format your response as a JSON object with:
             console.error('Proactive analysis error:', error);
         }
     }
+    
+    // Generate proactive insights based on current data
+    async generateProactiveInsights() {
+        // Placeholder implementation - will be enhanced with actual insight generation
+        console.log('📊 Generating proactive insights...');
+        return [];
+    }
+    
+    // Assess overall system health
+    async assessSystemHealth() {
+        // Placeholder implementation - will check datasource health, query performance, etc.
+        console.log('🏥 Assessing system health...');
+        return {
+            healthy: true,
+            metrics: {
+                datasourceConnectivity: 'good',
+                queryPerformance: 'normal',
+                errorRate: 0
+            }
+        };
+    }
+    
+    // Notify user of proactive findings
+    notifyProactiveFindings(findings) {
+        // Placeholder implementation - will send notifications through UI
+        console.log('📢 Proactive findings:', findings);
+        
+        if (findings.anomalies && findings.anomalies.length > 0) {
+            console.log(`⚠️ Found ${findings.anomalies.length} anomalies`);
+        }
+        
+        if (findings.insights && findings.insights.length > 0) {
+            console.log(`💡 Generated ${findings.insights.length} insights`);
+        }
+        
+        if (findings.healthStatus && !findings.healthStatus.healthy) {
+            console.log('❌ System health issues detected');
+        }
+    }
 
     // Learning and adaptation
     async learnFromInteraction(userInput, response, results) {
