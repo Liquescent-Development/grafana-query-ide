@@ -208,10 +208,17 @@ const OllamaService = {
                 if (!data.response) {
                     throw new Error('Empty response from Ollama');
                 }
+                
+                // Check if response is complete
+                if (data.done === false) {
+                    console.warn('⚠️ Received incomplete response from Ollama (done: false)');
+                    throw new Error('Incomplete response from model - the response was truncated. Try reducing the request size or increasing num_predict.');
+                }
 
                 console.log('✅ AI response generated successfully', {
                     responseLength: data.response.length,
-                    attempt: attempt
+                    attempt: attempt,
+                    done: data.done
                 });
 
                 return {
@@ -254,25 +261,57 @@ const OllamaService = {
 
     // Validate and parse JSON response from AI
     parseJsonResponse(response) {
+        let cleanResponse;  // Declare at function scope
+        
         try {
-            // Strip markdown code blocks if present (common with Gemma and other models)
-            let cleanResponse = response;
+            cleanResponse = response;
             
-            // Remove markdown code blocks (```json ... ``` or ``` ... ```)
-            cleanResponse = cleanResponse.replace(/```(?:json)?\s*\n?/g, '').replace(/```\s*$/g, '');
+            // Method 1: Check if response contains markdown code blocks with JSON
+            // Pattern: ```json { ... } ``` or ```json\n{ ... }\n```
+            const markdownJsonMatch = cleanResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (markdownJsonMatch) {
+                console.log('📋 Found JSON in markdown code block');
+                return JSON.parse(markdownJsonMatch[1]);
+            }
             
-            // Try to extract JSON from cleaned response
+            // Method 2: Remove all markdown code block markers and try to extract JSON
+            // This handles cases where the closing ``` might be missing
+            cleanResponse = cleanResponse.replace(/```(?:json)?\s*/g, '').replace(/```/g, '');
+            
+            
+            // Method 3: Try to extract JSON object from the cleaned response
             const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
+                console.log('📋 Found JSON after cleaning markdown');
                 return JSON.parse(jsonMatch[0]);
             }
             
-            // If no JSON found, try parsing the entire cleaned response
+            // Method 4: Check if response starts with conversational text before JSON
+            // Some models might say something like "Here's the analysis:" before the JSON
+            const lines = cleanResponse.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('{')) {
+                    // Found potential JSON start, take from here to end
+                    const jsonText = lines.slice(i).join('\n');
+                    const extractedJson = jsonText.match(/\{[\s\S]*\}/);
+                    if (extractedJson) {
+                        console.log('📋 Found JSON after conversational text');
+                        return JSON.parse(extractedJson[0]);
+                    }
+                }
+            }
+            
+            // Method 5: Last resort - try parsing the entire cleaned response
+            console.log('📋 Attempting to parse entire response as JSON');
             return JSON.parse(cleanResponse);
             
         } catch (error) {
             console.error('Failed to parse JSON response:', error);
             console.log('Raw response:', response);
+            if (typeof cleanResponse !== 'undefined') {
+                console.log('Cleaned response attempt:', cleanResponse);
+            }
             throw new Error('AI returned invalid JSON response');
         }
     },

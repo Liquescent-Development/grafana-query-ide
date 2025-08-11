@@ -13,6 +13,7 @@ const AnalyticsVisualizer = {
             medium: '#FF9800',
             high: '#F44336',
             critical: '#9C27B0',
+            unknown: '#999999',
             background: 'rgba(76, 175, 80, 0.1)'
         },
         prediction: {
@@ -319,10 +320,10 @@ const AnalyticsVisualizer = {
             fill: false // Explicitly no fill
         }];
         
-        // Add anomaly points by severity
-        const severityLevels = ['low', 'medium', 'high', 'critical'];
+        // Add anomaly points by severity (including unknown)
+        const severityLevels = ['low', 'medium', 'high', 'critical', 'unknown'];
         severityLevels.forEach(severity => {
-            const severityAnomalies = anomalies.filter(a => a.severity === severity);
+            const severityAnomalies = anomalies.filter(a => (a.severity || 'unknown') === severity);
             if (severityAnomalies.length > 0) {
                 console.log(`📊 Adding ${severity} anomalies:`, severityAnomalies.length);
                 // Create a sparse array for anomalies that matches the label length
@@ -729,7 +730,9 @@ const AnalyticsVisualizer = {
         let html = '<div class="anomalies-grid">';
         
         anomalies.slice(0, 10).forEach(anomaly => {
-            const severityColor = this.colors.anomaly[anomaly.severity] || '#999999';
+            // Handle missing severity field gracefully
+            const severity = anomaly.severity || 'unknown';
+            const severityColor = this.colors.anomaly[severity] || '#999999';
             const timestamp = new Date(anomaly.timestamp).toLocaleString();
             
             html += `
@@ -737,15 +740,15 @@ const AnalyticsVisualizer = {
                     <div class="anomaly-header">
                         <span class="anomaly-time">${timestamp}</span>
                         <span class="anomaly-severity" style="color: ${severityColor}">
-                            ${anomaly.severity.toUpperCase()}
+                            ${severity.toUpperCase()}
                         </span>
                     </div>
                     <div class="anomaly-details">
                         <div class="anomaly-value">Value: <strong>${anomaly.value}</strong></div>
-                        <div class="anomaly-score">Score: <strong>${anomaly.score.toFixed(2)}</strong></div>
-                        <div class="anomaly-type">Type: <strong>${anomaly.type}</strong></div>
+                        <div class="anomaly-score">Score: <strong>${anomaly.score ? anomaly.score.toFixed(2) : 'N/A'}</strong></div>
+                        <div class="anomaly-type">Type: <strong>${anomaly.type || 'unknown'}</strong></div>
                     </div>
-                    <div class="anomaly-explanation">${anomaly.explanation}</div>
+                    <div class="anomaly-explanation">${anomaly.explanation || 'No explanation provided'}</div>
                 </div>
             `;
         });

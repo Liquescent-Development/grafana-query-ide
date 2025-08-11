@@ -295,9 +295,17 @@ const OpenAIService = {
             console.error('Failed to parse JSON response:', error);
             console.log('Raw response:', response);
             
+            // Check if response contains markdown code blocks (unlikely for OpenAI but possible)
+            const markdownJsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (markdownJsonMatch) {
+                console.log('📋 Found JSON in markdown code block');
+                return JSON.parse(markdownJsonMatch[1]);
+            }
+            
             // Try to extract JSON from response
             const jsonMatch = response.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
+                console.log('📋 Found JSON object in response');
                 return JSON.parse(jsonMatch[0]);
             }
             
