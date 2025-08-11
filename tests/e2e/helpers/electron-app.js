@@ -58,30 +58,50 @@ class ElectronApp {
   async clearTestData() {
     // Clear test connections from localStorage
     await this.window.evaluate(() => {
-      // Only clear test-related data, not user's actual configurations
-      const connections = JSON.parse(localStorage.getItem('grafanaConnections') || '[]');
-      const aiConnections = JSON.parse(localStorage.getItem('AI_CONNECTIONS') || '[]');
-      
-      // Filter out test connections (those pointing to localhost:3001 mock server)
-      const filteredConnections = connections.filter(conn => 
-        !conn.url?.includes('localhost:3001') && !conn.name?.includes('Test ')
-      );
-      const filteredAiConnections = aiConnections.filter(conn => 
-        !conn.endpoint?.includes('localhost:3001') && !conn.name?.includes('Test ')
-      );
-      
-      // Only update if we actually removed test data
-      if (filteredConnections.length !== connections.length) {
-        localStorage.setItem('grafanaConnections', JSON.stringify(filteredConnections));
-      }
-      if (filteredAiConnections.length !== aiConnections.length) {
-        localStorage.setItem('AI_CONNECTIONS', JSON.stringify(filteredAiConnections));
-      }
-      
-      // Clear any active test connections
-      const activeConnection = localStorage.getItem('ACTIVE_AI_CONNECTION');
-      if (activeConnection && activeConnection.includes('test')) {
-        localStorage.removeItem('ACTIVE_AI_CONNECTION');
+      try {
+        // Only clear test-related data, not user's actual configurations
+        let connections = [];
+        let aiConnections = [];
+        
+        try {
+          connections = JSON.parse(localStorage.getItem('grafanaConnections') || '[]');
+        } catch (e) {
+          connections = [];
+        }
+        
+        try {
+          aiConnections = JSON.parse(localStorage.getItem('AI_CONNECTIONS') || '[]');
+        } catch (e) {
+          aiConnections = [];
+        }
+        
+        // Ensure they are arrays
+        if (!Array.isArray(connections)) connections = [];
+        if (!Array.isArray(aiConnections)) aiConnections = [];
+        
+        // Filter out test connections (those pointing to localhost:3001 mock server)
+        const filteredConnections = connections.filter(conn => 
+          !conn.url?.includes('localhost:3001') && !conn.name?.includes('Test ')
+        );
+        const filteredAiConnections = aiConnections.filter(conn => 
+          !conn.endpoint?.includes('localhost:3001') && !conn.name?.includes('Test ')
+        );
+        
+        // Only update if we actually removed test data
+        if (filteredConnections.length !== connections.length) {
+          localStorage.setItem('grafanaConnections', JSON.stringify(filteredConnections));
+        }
+        if (filteredAiConnections.length !== aiConnections.length) {
+          localStorage.setItem('AI_CONNECTIONS', JSON.stringify(filteredAiConnections));
+        }
+        
+        // Clear any active test connections
+        const activeConnection = localStorage.getItem('ACTIVE_AI_CONNECTION');
+        if (activeConnection && activeConnection.includes('test')) {
+          localStorage.removeItem('ACTIVE_AI_CONNECTION');
+        }
+      } catch (error) {
+        console.error('Error clearing test data:', error);
       }
     });
   }

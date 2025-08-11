@@ -1,10 +1,11 @@
 // Unit tests for Analytics endpoint configuration
-describe('Analytics Endpoint Configuration', () => {
+
+describe('Analytics Endpoint Configuration', function() {
     let Analytics;
     let originalOllamaService;
     let originalFetch;
     
-    beforeEach(() => {
+    beforeEach(function() {
         // Setup test environment
         require('../setup/test-setup');
         
@@ -37,12 +38,12 @@ describe('Analytics Endpoint Configuration', () => {
         Analytics = require('../../public/js/analytics.js');
     });
     
-    afterEach(() => {
+    afterEach(function() {
         global.OllamaService = originalOllamaService;
         global.fetch = originalFetch;
     });
     
-    test('should use OllamaService endpoint when fetching models', async () => {
+    it('should use OllamaService endpoint when fetching models', async function() {
         // Set up OllamaService with custom endpoint
         const customEndpoint = 'http://192.168.1.50:11434';
         global.OllamaService.isConnected = true;
@@ -62,7 +63,7 @@ describe('Analytics Endpoint Configuration', () => {
         expect(global.fetch).not.toHaveBeenCalledWith('http://localhost:11434/api/tags');
     });
     
-    test('should update endpoint when connecting to different server', async () => {
+    it('should update endpoint when connecting to different server', async function() {
         const endpoint1 = 'http://server1:11434';
         const endpoint2 = 'http://server2:11434';
         
@@ -92,7 +93,7 @@ describe('Analytics Endpoint Configuration', () => {
         expect(Analytics.config.ollamaEndpoint).not.toBe(endpoint1);
     });
     
-    test('should not default to localhost when no endpoint is configured', async () => {
+    it('should not default to localhost when no endpoint is configured', async function() {
         // No OllamaService connection
         global.OllamaService.isConnected = false;
         global.OllamaService.config.endpoint = null;
@@ -119,7 +120,7 @@ describe('Analytics Endpoint Configuration', () => {
         }
     });
     
-    test('should use OpenAI service when provider is openai', async () => {
+    it('should use OpenAI service when provider is openai', async function() {
         const connection = {
             id: 'openai-1',
             name: 'OpenAI',
@@ -147,7 +148,7 @@ describe('Analytics Endpoint Configuration', () => {
         }
     });
     
-    test('should handle missing endpoint gracefully', async () => {
+    it('should handle missing endpoint gracefully', async function() {
         // Connection with no endpoint
         const connection = {
             id: 'bad-1',
@@ -168,7 +169,7 @@ describe('Analytics Endpoint Configuration', () => {
         }
     });
     
-    test('should sync with OllamaService endpoint on initialization', () => {
+    it('should sync with OllamaService endpoint on initialization', function() {
         const serviceEndpoint = 'http://ollama.internal:11434';
         
         // OllamaService already connected

@@ -38,12 +38,21 @@ const Analytics = {
     // Initialize the analytics system
     initialize() {
         console.log('🤖 Initializing Analytics system...');
-        // Ensure we start disconnected until proven otherwise
-        this.isConnected = false;
+        // Only reset connection state if we're not already connected
+        // This prevents losing connection state when switching views
+        if (!this.isConnected) {
+            // Check if services are already connected
+            if (window.OllamaService?.isConnected || window.OpenAIService?.isConnected) {
+                console.log('🔍 Found existing service connection during Analytics init');
+                this.isConnected = true;
+            } else {
+                this.isConnected = false;
+            }
+        }
         this.setupEventListeners();
         this.loadConfiguration();
         this.updateUI();
-        console.log('✅ Analytics system initialized');
+        console.log('✅ Analytics system initialized, isConnected:', this.isConnected);
     },
 
     // Setup all event listeners
@@ -519,12 +528,24 @@ const Analytics = {
             let initResult = false;
             if (connection.provider === 'openai') {
                 this.config.openaiApiKey = connection.apiKey;
-                initResult = await OpenAIService.initialize(connection.apiKey, connection.model);
-                console.log('🔍 OpenAI init result in Analytics:', initResult, 'isConnected now:', window.OpenAIService?.isConnected);
+                // Check if already connected before re-initializing
+                if (window.OpenAIService?.isConnected) {
+                    console.log('🔍 OpenAI already connected, skipping re-initialization');
+                    initResult = true;
+                } else {
+                    initResult = await OpenAIService.initialize(connection.apiKey, connection.model);
+                    console.log('🔍 OpenAI init result in Analytics:', initResult, 'isConnected now:', window.OpenAIService?.isConnected);
+                }
             } else {
                 this.config.ollamaEndpoint = connection.endpoint;
-                initResult = await OllamaService.initialize(connection.endpoint, connection.model);
-                console.log('🔍 Ollama init result in Analytics:', initResult, 'isConnected now:', window.OllamaService?.isConnected);
+                // Check if already connected before re-initializing
+                if (window.OllamaService?.isConnected) {
+                    console.log('🔍 Ollama already connected, skipping re-initialization');
+                    initResult = true;
+                } else {
+                    initResult = await OllamaService.initialize(connection.endpoint, connection.model);
+                    console.log('🔍 Ollama init result in Analytics:', initResult, 'isConnected now:', window.OllamaService?.isConnected);
+                }
             }
             
             // Only set connected if initialization actually succeeded

@@ -2446,6 +2446,13 @@ async function connectToAiService(connectionId) {
             // Default to Ollama for backwards compatibility
             initSuccess = await OllamaService.initialize(connection.endpoint, connection.model);
             console.log('🔍 Ollama init result:', initSuccess, 'isConnected:', OllamaService.isConnected);
+            
+            // CRITICAL FIX: If OllamaService.initialize returned true but isConnected is still false,
+            // there's a bug in the initialization. Force the correct state.
+            if (initSuccess && !OllamaService.isConnected) {
+                console.warn('⚠️ BUG: OllamaService.initialize returned true but isConnected is false. Fixing...');
+                OllamaService.isConnected = true;
+            }
         }
         
         if (!initSuccess) {
@@ -2464,31 +2471,23 @@ async function connectToAiService(connectionId) {
         // Force UI refresh with a small delay to ensure state is fully updated
         setTimeout(async () => {
             loadAiConnections();
-            // Properly initialize Analytics connection with the connected service
+            // Sync Analytics with the connected service
             if (window.Analytics) {
-                // IMPORTANT: Since OllamaService.initialize was already called above and succeeded,
-                // we need to sync Analytics state without re-initializing the service
+                // Since OllamaService/OpenAIService.initialize was already called above,
+                // just sync the Analytics state
+                window.Analytics.isConnected = true;
+                window.Analytics.config.provider = connection.provider || 'ollama';
+                window.Analytics.config.activeConnectionName = connection.name;
+                window.Analytics.config.activeConnectionId = connection.id;
+                
                 if (connection.provider === 'openai') {
-                    if (window.OpenAIService?.isConnected) {
-                        window.Analytics.isConnected = true;
-                        window.Analytics.config.provider = 'openai';
-                        window.Analytics.config.openaiApiKey = connection.apiKey;
-                        window.Analytics.config.selectedModel = connection.model;
-                        window.Analytics.config.activeConnectionName = connection.name;
-                        window.Analytics.config.activeConnectionId = connection.id;
-                        console.log('✅ Analytics synced with OpenAI connection');
-                    }
+                    window.Analytics.config.openaiApiKey = connection.apiKey;
+                    window.Analytics.config.selectedModel = connection.model;
+                    console.log('✅ Analytics synced with OpenAI connection');
                 } else {
-                    // Ollama provider
-                    if (window.OllamaService?.isConnected) {
-                        window.Analytics.isConnected = true;
-                        window.Analytics.config.provider = 'ollama';
-                        window.Analytics.config.ollamaEndpoint = connection.endpoint;
-                        window.Analytics.config.selectedModel = connection.model;
-                        window.Analytics.config.activeConnectionName = connection.name;
-                        window.Analytics.config.activeConnectionId = connection.id;
-                        console.log('✅ Analytics synced with Ollama connection');
-                    }
+                    window.Analytics.config.ollamaEndpoint = connection.endpoint;
+                    window.Analytics.config.selectedModel = connection.model;
+                    console.log('✅ Analytics synced with Ollama connection');
                 }
                 
                 // Update UI elements
