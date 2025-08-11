@@ -2454,11 +2454,17 @@ async function connectToAiService(connectionId) {
         Storage.setAiConnections(aiConnections);
         
         // Force UI refresh with a small delay to ensure state is fully updated
-        setTimeout(() => {
+        setTimeout(async () => {
             loadAiConnections();
-            // Also update Analytics connection status
+            // Properly initialize Analytics connection with the connected service
             if (window.Analytics) {
-                Analytics.isConnected = true;
+                // Call Analytics.initializeAiConnection to properly set up the connection
+                const initSuccess = await Analytics.initializeAiConnection(connection);
+                if (initSuccess) {
+                    console.log('✅ Analytics AI connection initialized');
+                } else {
+                    console.warn('⚠️ Analytics AI connection initialization failed');
+                }
                 // Update title bar status after connection is established
                 if (typeof window.Analytics.updateTitleBarStatus === 'function') {
                     window.Analytics.updateTitleBarStatus();

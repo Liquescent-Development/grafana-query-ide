@@ -8,6 +8,13 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// Suppress IPC errors that aren't relevant for cleanup
+process.on('uncaughtException', (err) => {
+  if (!err.message.includes('get-ai-avatar')) {
+    console.error('Unexpected error:', err);
+  }
+});
+
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     show: false,
