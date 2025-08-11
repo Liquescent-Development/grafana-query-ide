@@ -109,9 +109,6 @@ const Interface = {
             case 'history':
                 this.loadHistory();
                 break;
-            case 'analytics':
-                this.loadAnalytics();
-                break;
             case 'agent':
                 // Show AI Agent panel (don't auto-open chat)
                 this.updateAgentPanel();
@@ -358,12 +355,46 @@ const Interface = {
                         </select>
                     </div>
                     <div class="option-group">
-                        <button class="execute-button" onclick="Interface.executeQuery('${tabId}')" disabled>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                            Execute
-                        </button>
+                        <div class="execute-dropdown-container">
+                            <button class="execute-button" onclick="Interface.executeQuery('${tabId}')" disabled>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                Execute
+                            </button>
+                            <button class="execute-dropdown-arrow" onclick="toggleExecuteDropdown('${tabId}')" disabled>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7 10l5 5 5-5z"/>
+                                </svg>
+                            </button>
+                            <div class="execute-dropdown-menu" id="executeDropdown-${tabId}" style="display: none;">
+                                <div class="dropdown-item" onclick="Interface.executeQuery('${tabId}')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    Execute
+                                </div>
+                                <div class="dropdown-separator"></div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'anomaly')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                    </svg>
+                                    Execute with Anomaly Detection
+                                </div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'prediction')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+                                    </svg>
+                                    Execute with Prediction
+                                </div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'trend')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/>
+                                    </svg>
+                                    Execute with Trend Analysis
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -832,13 +863,22 @@ const Interface = {
         document.querySelectorAll('.panel-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        document.querySelector(`[data-panel="${panelName}"]`).classList.add('active');
+        const targetTab = document.querySelector(`[data-panel="${panelName}"]`);
+        if (targetTab) {
+            targetTab.classList.add('active');
+        }
 
         // Update active panel content
         document.querySelectorAll('.panel-section').forEach(section => {
             section.classList.remove('active');
+            section.style.display = 'none';
         });
-        document.getElementById(`${panelName}Panel`).classList.add('active');
+        
+        const targetPanel = document.getElementById(`${panelName}Panel`);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+            targetPanel.style.display = 'block';
+        }
 
         this.activePanel = panelName;
     },
@@ -1130,7 +1170,7 @@ const Interface = {
             document.body.appendChild(tempIntervalMs);
             document.body.appendChild(tempInstantQuery);
             
-            Queries.executeQuery().then(() => {
+            return Queries.executeQuery().then(() => {
                 // Restore original function and clean up
                 Editor.getQueryValue = originalGetQueryValue;
                 document.body.removeChild(tempSelect);
@@ -1286,19 +1326,26 @@ const Interface = {
             console.log('updateExecuteButton - tabContainer found:', !!tabContainer, 'tabData found:', !!tabData);
             if (tabContainer && tabData) {
                 const executeBtn = tabContainer.querySelector('.execute-button');
+                const executeDropdownArrow = tabContainer.querySelector('.execute-dropdown-arrow');
                 console.log('updateExecuteButton - executeBtn found:', !!executeBtn);
+                console.log('updateExecuteButton - executeDropdownArrow found:', !!executeDropdownArrow);
                 console.log('updateExecuteButton - tabContainer innerHTML length:', tabContainer.innerHTML.length);
                 console.log('updateExecuteButton - tabContainer has execute-button class:', tabContainer.innerHTML.includes('execute-button'));
+                
+                const isEnabled = GrafanaConfig.connected && tabData.datasourceId;
+                
                 if (executeBtn) {
                     console.log('updateExecuteButton for tab:', tabId, 'connected:', GrafanaConfig.connected, 'datasourceId:', tabData.datasourceId);
-                    if (GrafanaConfig.connected && tabData.datasourceId) {
-                        executeBtn.disabled = false;
-                        console.log('Execute button enabled for tab:', tabId);
-                    } else {
-                        executeBtn.disabled = true;
-                        console.log('Execute button disabled for tab:', tabId);
-                    }
-                } else {
+                    executeBtn.disabled = !isEnabled;
+                    console.log('Execute button', isEnabled ? 'enabled' : 'disabled', 'for tab:', tabId);
+                }
+                
+                if (executeDropdownArrow) {
+                    executeDropdownArrow.disabled = !isEnabled;
+                    console.log('Execute dropdown arrow', isEnabled ? 'enabled' : 'disabled', 'for tab:', tabId);
+                }
+                
+                if (!executeBtn) {
                     console.log('updateExecuteButton - no execute button found for tab:', tabId);
                 }
             } else {
@@ -1562,19 +1609,6 @@ const Interface = {
         }
     },
 
-    loadAnalytics() {
-        console.log('Interface.loadAnalytics called');
-        if (typeof Analytics !== 'undefined') {
-            Analytics.initialize();
-        } else {
-            console.error('Analytics module not available');
-        }
-        
-        // Load AI connections when analytics panel is opened
-        if (typeof loadAiConnections === 'function') {
-            loadAiConnections();
-        }
-    },
 
     // Initialize resizers for sidebar and panel
     initializeResizers() {
@@ -1738,6 +1772,214 @@ const Interface = {
         } catch (error) {
             console.error('Connection attempt failed:', error);
             return false;
+        }
+    },
+
+    // Execute query with AI analysis
+    async executeWithAnalysis(tabId, analysisType) {
+        console.log('executeWithAnalysis called with tabId:', tabId, 'analysisType:', analysisType);
+        
+        // First execute the regular query
+        await this.executeQuery(tabId);
+        
+        // Check if we have results to analyze
+        if (!GrafanaConfig.currentResults || !GrafanaConfig.currentResults.results || !GrafanaConfig.currentResults.results.A) {
+            this.showToast('No query results to analyze. Please execute a successful query first.', 'error');
+            return;
+        }
+
+        // Check if AI is connected
+        if (!window.Analytics || !Analytics.isConnected) {
+            this.showToast('AI service not connected. Please connect to an AI service first.', 'error');
+            return;
+        }
+
+        try {
+            this.showToast(`Running ${analysisType} analysis...`, 'info');
+            
+            // Show and switch to AI Analysis panel
+            this.showAIAnalysisTab();
+            this.switchPanel('ai-analysis');
+            
+            // Show loading in AI Analysis panel
+            const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+            if (aiAnalysisContent) {
+                aiAnalysisContent.innerHTML = '<div class="analysis-loading">Running AI analysis... This may take a few moments.</div>';
+            }
+            
+            // Get the current query results
+            const results = GrafanaConfig.currentResults;
+            const tabData = this.tabs.get(tabId || this.activeTab);
+            const query = tabData && tabData.editor ? tabData.editor.getValue() : '';
+            
+            // Run the AI analysis
+            let analysisResult;
+            switch (analysisType) {
+                case 'anomaly':
+                    analysisResult = await this.runAnomalyDetection(results, query);
+                    break;
+                case 'prediction':
+                    analysisResult = await this.runPrediction(results, query);
+                    break;
+                case 'trend':
+                    analysisResult = await this.runTrendAnalysis(results, query);
+                    break;
+                default:
+                    throw new Error('Unknown analysis type: ' + analysisType);
+            }
+            
+            // Display results in AI Analysis panel
+            this.displayAIAnalysisResults(analysisResult, analysisType);
+            this.showToast(`${analysisType} analysis completed`, 'success');
+            
+        } catch (error) {
+            console.error('AI analysis failed:', error);
+            this.showToast('AI analysis failed: ' + error.message, 'error');
+            
+            // Show error in AI Analysis panel
+            const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+            if (aiAnalysisContent) {
+                aiAnalysisContent.innerHTML = `<div class="analysis-error">Analysis failed: ${error.message}</div>`;
+            }
+        }
+    },
+
+    // Show AI Analysis tab
+    showAIAnalysisTab() {
+        const aiAnalysisTab = document.querySelector('[data-panel="ai-analysis"]');
+        if (aiAnalysisTab) {
+            aiAnalysisTab.style.display = 'block';
+        }
+    },
+
+    // Run anomaly detection analysis
+    async runAnomalyDetection(results, query) {
+        // Use AIAnalytics.executeAnalysis which is the correct method
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'anomaly',
+                sensitivity: 'medium',
+                alertThreshold: 0.8,
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Run prediction analysis
+    async runPrediction(results, query) {
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            // Configure Analytics for the analysis
+            if (typeof Analytics !== 'undefined') {
+                Analytics.config.analysisType = 'prediction';
+                Analytics.config.forecastHorizon = '1d';
+                Analytics.config.confidenceLevel = 0.95;
+                Analytics.config.timeRange = timeRange;
+            }
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'prediction',
+                forecastHorizon: '1d',
+                confidenceLevel: 0.95,
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Run trend analysis
+    async runTrendAnalysis(results, query) {
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            // Configure Analytics for the analysis
+            if (typeof Analytics !== 'undefined') {
+                Analytics.config.analysisType = 'trend';
+                Analytics.config.trendDepth = 'seasonal';
+                Analytics.config.timeRange = timeRange;
+            }
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'trend',
+                trendDepth: 'seasonal',
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Display AI analysis results
+    displayAIAnalysisResults(analysisResult, analysisType) {
+        const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+        if (!aiAnalysisContent) return;
+
+        let html = `<div class="ai-analysis-results">`;
+        html += `<h3>${this.getAnalysisTitle(analysisType)}</h3>`;
+        
+        if (analysisResult.insights && analysisResult.insights.length > 0) {
+            html += '<div class="analysis-insights">';
+            html += '<h4>Key Insights:</h4>';
+            html += '<ul>';
+            analysisResult.insights.forEach(insight => {
+                html += `<li>${Utils.escapeHtml(insight)}</li>`;
+            });
+            html += '</ul></div>';
+        }
+
+        if (analysisResult.summary) {
+            html += `<div class="analysis-summary">`;
+            html += `<h4>Summary:</h4>`;
+            html += `<p>${Utils.escapeHtml(analysisResult.summary)}</p>`;
+            html += `</div>`;
+        }
+
+        if (analysisResult.recommendations && analysisResult.recommendations.length > 0) {
+            html += '<div class="analysis-recommendations">';
+            html += '<h4>Recommendations:</h4>';
+            html += '<ul>';
+            analysisResult.recommendations.forEach(rec => {
+                html += `<li>${Utils.escapeHtml(rec)}</li>`;
+            });
+            html += '</ul></div>';
+        }
+
+        // Show raw analysis data if available
+        html += '<details style="margin-top: 20px;"><summary style="cursor: pointer; color: #f46800;">View Raw Analysis Data</summary>';
+        html += '<pre style="background: #2d2d30; padding: 10px; border-radius: 4px; overflow: auto;">';
+        html += Utils.escapeHtml(JSON.stringify(analysisResult, null, 2));
+        html += '</pre></details>';
+
+        html += '</div>';
+        
+        aiAnalysisContent.innerHTML = html;
+    },
+
+    // Get analysis title
+    getAnalysisTitle(analysisType) {
+        switch (analysisType) {
+            case 'anomaly': return 'Anomaly Detection Results';
+            case 'prediction': return 'Prediction Analysis Results';
+            case 'trend': return 'Trend Analysis Results';
+            default: return 'Analysis Results';
         }
     }
 };
@@ -2757,5 +2999,26 @@ async function connectToConnectionWithSpinner(connectionId) {
         }
         
         Interface.showToast(errorMessage, 'error');
+    }
+}
+
+// Global functions for execute dropdown functionality
+function toggleExecuteDropdown(tabId) {
+    const dropdown = document.getElementById(`executeDropdown-${tabId}`);
+    if (dropdown) {
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+        
+        // Close dropdown when clicking outside
+        if (!isVisible) {
+            setTimeout(() => {
+                document.addEventListener('click', function closeDropdown(e) {
+                    if (!e.target.closest('.execute-dropdown-container')) {
+                        dropdown.style.display = 'none';
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                });
+            }, 0);
+        }
     }
 }

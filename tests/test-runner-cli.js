@@ -35,6 +35,7 @@ class CLITestRunner {
         this.startTime = null;
         this.verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
         this.testType = this.getTestType();
+        this.currentTestType = 'unit'; // Default test type for describe blocks
         this.setupGlobals();
     }
 
@@ -98,7 +99,8 @@ class CLITestRunner {
 
     setupGlobals() {
         // Setup global test environment
-        global.describe = (name, fn, type = 'unit') => this.describe(name, fn, type);
+        const runner = this; // Capture the runner context
+        global.describe = (name, fn, type) => runner.describe(name, fn, type);
         global.it = (name, fn) => this.it(name, fn);
         global.beforeEach = (fn) => this.beforeEach(fn);
         global.afterEach = (fn) => this.afterEach(fn);
@@ -524,10 +526,11 @@ class CLITestRunner {
         };
     }
 
-    describe(suiteName, testFunction, type = 'unit') {
+    describe(suiteName, testFunction, type = null) {
+        const suiteType = type || this.currentTestType || 'unit';
         const suite = {
             name: suiteName,
-            type: type,
+            type: suiteType,
             tests: [],
             beforeEach: null,
             afterEach: null,
@@ -995,7 +998,17 @@ class CLITestRunner {
         
         for (const testFile of testFiles) {
             try {
+                // Set currentTestType based on file path for proper test categorization
+                if (testFile.includes('/integration/')) {
+                    this.currentTestType = 'integration';
+                } else if (testFile.includes('/unit/')) {
+                    this.currentTestType = 'unit';
+                } else {
+                    this.currentTestType = 'unit'; // default
+                }
+                
                 this.loadModule(testFile);
+                
                 if (this.verbose) {
                     this.logSuccess(`Loaded test file: ${path.basename(testFile)}`);
                 }

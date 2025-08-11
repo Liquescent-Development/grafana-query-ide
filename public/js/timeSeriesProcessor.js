@@ -44,7 +44,7 @@ const TimeSeriesProcessor = {
         const optimalInterval = this.calculateOptimalInterval(timeRange, maxPoints);
         
         // Build base aggregation
-        const aggregationFunc = this.getAggregationFunction(config.field, config.analysisType);
+        const aggregationFunc = this.getAggregationFunction(config.field, config.analysisType, config.aggregation);
         
         // Build tag filters
         const tagFilters = this.buildTagFilters(config.tags);
@@ -137,7 +137,13 @@ const TimeSeriesProcessor = {
     },
 
     // Get appropriate aggregation function
-    getAggregationFunction(fieldName, analysisType = 'anomaly') {
+    getAggregationFunction(fieldName, analysisType = 'anomaly', userAggregation = null) {
+        // If user specified an aggregation, use it
+        if (userAggregation) {
+            return userAggregation;
+        }
+        
+        // Otherwise fall back to smart defaults
         const fieldLower = fieldName.toLowerCase();
         
         // Field-specific aggregations

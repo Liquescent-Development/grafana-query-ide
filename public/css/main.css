@@ -115,13 +115,13 @@ body {
 /* Main Content Area (everything except activity bar) */
 .main-content-area {
     flex: 1;
-    display: flex;
+    display: flex !important;
     overflow: hidden;
 }
 
 /* Horizontal Layout (now just the editor + panel column) */
 .horizontal-layout {
-    display: flex;
+    display: flex !important;
     flex: 1;
     flex-direction: row; /* Sidebar and editor-panel-area side by side */
     overflow: hidden;
@@ -129,12 +129,13 @@ body {
 
 /* Editor and Panel Area (right side - contains editor and panel stacked) */
 .editor-panel-area {
-    display: flex;
+    display: flex !important;
     flex: 1;
     flex-direction: column; /* Editor and panel stacked vertically */
     overflow: hidden;
-    width: 0; /* Force flex item to shrink and grow properly */
-    min-width: 0; /* Allow flex item to shrink below content size */
+    width: auto; /* Let it use available space */
+    min-width: 400px; /* Ensure minimum visibility */
+    background-color: #1e1e1e; /* Debug: make it visible */
 }
 
 /* Activity Bar */
@@ -492,7 +493,7 @@ body {
 /* Editor Area */
 .editor-area {
     flex: 1;
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     overflow: hidden;
     background-color: #1e1e1e;
@@ -503,8 +504,10 @@ body {
 .tab-bar {
     height: 35px;
     background-color: #2d2d30;
-    border-bottom: 1px solid #2d2d30;
     display: flex;
+    border-bottom: 1px solid #2d2d30;
+    width: 100%;
+    flex-shrink: 0;
     align-items: center;
     overflow-x: auto;
     padding: 0 4px;
@@ -584,9 +587,12 @@ body {
 
 /* Tab Content */
 .tab-content {
-    flex: 1;
+    flex: 1 !important;
     position: relative;
     overflow: hidden;
+    display: flex !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .editor-container {
@@ -596,15 +602,21 @@ body {
 }
 
 .editor-container.active {
-    display: flex;
+    display: flex !important;
+    flex: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    flex-direction: column !important;
 }
 
 /* Editor Toolbar */
 .editor-toolbar {
     height: 40px;
     background-color: #2d2d30;
-    border-bottom: 1px solid #2d2d30;
     display: flex;
+    border-bottom: 1px solid #2d2d30;
+    width: 100%;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
@@ -694,12 +706,19 @@ body {
     border-color: #007acc;
 }
 
+/* GitHub-style Execute Dropdown Button */
+.execute-dropdown-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
 .execute-button {
     background-color: #007acc;
     border: none;
     color: #ffffff;
     padding: 6px 12px;
-    border-radius: 3px;
+    border-radius: 3px 0 0 3px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -707,6 +726,7 @@ body {
     font-size: 12px;
     font-weight: 500;
     transition: all 0.1s ease;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .execute-button:hover:not(:disabled) {
@@ -717,6 +737,186 @@ body {
     background-color: #3c3c3c;
     color: #858585;
     cursor: not-allowed;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.execute-dropdown-arrow {
+    background-color: #007acc;
+    border: none;
+    color: #ffffff;
+    padding: 6px 8px;
+    border-radius: 0 3px 3px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.1s ease;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.execute-dropdown-arrow:hover:not(:disabled) {
+    background-color: #005a9e;
+}
+
+.execute-dropdown-arrow:disabled {
+    background-color: #3c3c3c;
+    color: #858585;
+    cursor: not-allowed;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.execute-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #2d2d30;
+    border: 1px solid #454545;
+    border-radius: 3px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    margin-top: 2px;
+    min-width: 250px;
+}
+
+.dropdown-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #cccccc;
+    transition: background-color 0.1s ease;
+}
+
+.dropdown-item:hover {
+    background-color: #37373d;
+}
+
+.dropdown-item:first-child {
+    border-radius: 3px 3px 0 0;
+}
+
+.dropdown-item:last-child {
+    border-radius: 0 0 3px 3px;
+}
+
+.dropdown-separator {
+    height: 1px;
+    background-color: #454545;
+    margin: 4px 0;
+}
+
+/* Hide dropdown by default */
+.execute-dropdown-menu[style*="display: none"] {
+    display: none !important;
+}
+
+.execute-dropdown-menu[style*="display: block"] {
+    display: block !important;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* GitHub-style focus ring */
+.execute-button:focus:not(:disabled),
+.execute-dropdown-arrow:focus:not(:disabled) {
+    outline: 2px solid #58a6ff;
+    outline-offset: -2px;
+}
+
+/* Better visual feedback for split button */
+.execute-dropdown-container:hover .execute-button:not(:disabled),
+.execute-dropdown-container:hover .execute-dropdown-arrow:not(:disabled) {
+    background: linear-gradient(180deg, #2ea043 0%, #238636 100%);
+}
+
+/* Loading and error states for AI Analysis */
+.analysis-loading {
+    text-align: center;
+    padding: 32px 16px;
+    color: #569cd6;
+    font-style: italic;
+}
+
+.analysis-error {
+    text-align: center;
+    padding: 32px 16px;
+    color: #f85149;
+    background-color: rgba(248, 81, 73, 0.1);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 4px;
+    margin: 16px;
+}
+
+/* AI Analysis Panel Styling */
+.ai-analysis-results {
+    padding: 16px;
+    color: #cccccc;
+}
+
+.ai-analysis-results h3 {
+    color: #569cd6;
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.ai-analysis-results h4 {
+    color: #f46800;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.analysis-insights, .analysis-summary, .analysis-recommendations {
+    background-color: #2d2d30;
+    border: 1px solid #454545;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.analysis-insights ul, .analysis-recommendations ul {
+    margin: 8px 0 0 16px;
+    list-style-type: disc;
+}
+
+.analysis-insights li, .analysis-recommendations li {
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.analysis-summary p {
+    line-height: 1.5;
+    margin: 8px 0 0 0;
+}
+
+.analysis-loading, .analysis-error {
+    text-align: center;
+    padding: 40px 20px;
+    color: #858585;
+    font-style: italic;
+}
+
+.analysis-error {
+    color: #ff6b6b;
+    background-color: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 4px;
+    margin: 20px;
 }
 
 /* Code Editor */
@@ -766,7 +966,7 @@ body {
     max-height: calc(90vh - 35px); /* Allow up to 90% of available height (minus title bar) */
     background-color: #252526;
     border-top: 1px solid #2d2d30;
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     overflow: hidden;
     flex-shrink: 0;
@@ -777,7 +977,7 @@ body {
 .panel-tabs {
     height: 35px;
     background-color: #2d2d30;
-    display: flex;
+    display: flex !important;
     align-items: center;
     padding: 0 16px;
     border-bottom: 1px solid #2d2d30;
@@ -824,6 +1024,7 @@ body {
     flex: 1;
     overflow: hidden;
     position: relative;
+    display: block !important;
 }
 
 .panel-section {
@@ -834,7 +1035,7 @@ body {
 }
 
 .panel-section.active {
-    display: block;
+    display: block !important;
 }
 
 .panel-toolbar {
@@ -3821,6 +4022,8 @@ body {
         transform: scale(1) !important;
     }
 }
+
+/* Debug CSS removed - HTML structure fixed */
 
 /* AI Analytics Panel Styles */
 #analyticsPanel {

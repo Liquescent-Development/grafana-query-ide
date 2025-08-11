@@ -16,6 +16,7 @@ const Analytics = {
         retentionPolicy: 'raw',
         measurement: '',
         field: '',
+        aggregation: 'sum', // Default aggregation function
         tags: {},
         tagFilters: [], // Array of {tagKey: '', tagValue: ''} objects
         groupByTime: false,
@@ -174,6 +175,14 @@ const Analytics = {
         if (field) {
             field.addEventListener('change', (e) => {
                 this.config.field = e.target.value;
+                this.saveConfiguration();
+            });
+        }
+
+        const aggregation = document.getElementById('analyticsAggregation');
+        if (aggregation) {
+            aggregation.addEventListener('change', (e) => {
+                this.config.aggregation = e.target.value;
                 this.saveConfiguration();
             });
         }
@@ -1229,6 +1238,7 @@ const Analytics = {
                 retentionPolicy: this.config.retentionPolicy,
                 measurement: this.config.measurement,
                 field: this.config.field,
+                aggregation: this.config.aggregation,
                 timeRange: this.config.timeRange,
                 tags: tags,
                 sensitivity: this.config.sensitivity,
@@ -1622,19 +1632,128 @@ const Analytics = {
         this.closeSavedAnalysisLoading();
         
         // Render results with proper loading handling
-        if (typeof AnalyticsVisualizer !== 'undefined') {
-            // Use setTimeout to allow UI to update and show the loading state
-            setTimeout(() => {
-                try {
-                    AnalyticsVisualizer.visualizeResults(results, 'analyticsModalResults');
-                } catch (error) {
-                    console.error('Error rendering charts:', error);
-                    this.showRawResultsInModal(results);
-                }
-            }, 100);
-        } else {
-            this.showRawResultsInModal(results);
+        // Execute a query to get the raw data for charting
+        this.executeQueryForChart(results).then(() => {
+            // Chart initialization is handled in executeQueryForChart
+        }).catch(error => {
+            console.error('Error creating chart:', error);
+            // Fall back to the custom visualizer if available
+            if (typeof AnalyticsVisualizer !== 'undefined') {
+                setTimeout(() => {
+                    try {
+                        AnalyticsVisualizer.visualizeResults(results, 'analyticsModalResults');
+                    } catch (error) {
+                        console.error('Error rendering charts:', error);
+                        this.showRawResultsInModal(results);
+                    }
+                }, 100);
+            } else {
+                this.showRawResultsInModal(results);
+            }
+        });
+    },
+
+    // Execute query to get chart data
+    async executeQueryForChart(aiResults) {
+        console.log('📊 Executing query for chart visualization');
+        
+        // Build the query with user's aggregation
+        const aggregation = this.config.aggregation || 'sum';
+        const measurement = this.config.retentionPolicy ? 
+            `"${this.config.retentionPolicy}"."${this.config.measurement}"` : 
+            `"${this.config.measurement}"`;
+        
+        let whereClause = `time >= now() - ${this.config.timeRange}`;
+        
+        // Add tag filters
+        if (this.config.tags && Object.keys(this.config.tags).length > 0) {
+            const tagFilters = Object.entries(this.config.tags)
+                .map(([key, value]) => `"${key}" = '${value}'`)
+                .join(' AND ');
+            whereClause += ` AND ${tagFilters}`;
         }
+        
+        // Calculate appropriate time interval for grouping
+        const interval = this.calculateTimeInterval(this.config.timeRange);
+        
+        const query = `SELECT ${aggregation}("${this.config.field}") as value 
+                      FROM ${measurement} 
+                      WHERE ${whereClause}
+                      GROUP BY time(${interval}) fill(none)`;
+        
+        console.log('📝 Chart query:', query);
+        
+        // Execute the query
+        const queryResult = await Queries.executeQuery(query, {
+            datasourceId: GrafanaConfig.currentDatasourceId,
+            datasourceType: GrafanaConfig.selectedDatasourceType
+        });
+        
+        if (!queryResult || !queryResult.results || !queryResult.results.A) {
+            throw new Error('No data returned from query');
+        }
+        
+        // Update the modal content with chart HTML
+        const modalResults = document.getElementById('analyticsModalResults');
+        if (modalResults) {
+            // Create the chart HTML structure that Charts.js expects
+            modalResults.innerHTML = `
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h4>Time Series Data</h4>
+                        <div class="chart-controls">
+                            <div class="chart-option">
+                                <input type="checkbox" id="showAllSeries" checked>
+                                <label for="showAllSeries">Show All Groups</label>
+                            </div>
+                            <div class="chart-option">
+                                <label for="chartType">Chart Type:</label>
+                                <select id="chartType">
+                                    <option value="line" selected>Line</option>
+                                    <option value="bar">Bar</option>
+                                    <option value="scatter">Scatter</option>
+                                </select>
+                            </div>
+                            <div class="chart-option">
+                                <input type="checkbox" id="smoothLines" checked>
+                                <label for="smoothLines">Smooth Lines</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="timeSeriesChart"></canvas>
+                    </div>
+                </div>
+                <div class="ai-analysis-section">
+                    <h4>AI Analysis Results</h4>
+                    <div id="aiAnalysisContent"></div>
+                </div>
+            `;
+            
+            // Initialize the chart using the existing Charts code
+            if (typeof Charts !== 'undefined') {
+                Charts.initializeChart(queryResult.results.A.frames || []);
+            }
+            
+            // Add the AI analysis results below the chart
+            const aiContent = document.getElementById('aiAnalysisContent');
+            if (aiContent && typeof AnalyticsVisualizer !== 'undefined') {
+                AnalyticsVisualizer.visualizeResults(aiResults, 'aiAnalysisContent');
+            }
+        }
+    },
+    
+    // Calculate appropriate time interval based on time range
+    calculateTimeInterval(timeRange) {
+        const intervals = {
+            '1h': '1m',
+            '6h': '1m',
+            '1d': '1m',
+            '7d': '1m',
+            '30d': '1m',  // Use 1m like Grafana does
+            '90d': '5m'
+        };
+        return intervals[timeRange] || '1m';
     },
 
     // Close results modal

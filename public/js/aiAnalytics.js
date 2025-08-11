@@ -262,11 +262,25 @@ const AIAnalytics = {
         console.log('🤖 Starting AI analysis...', config);
         
         try {
-            // Step 1: Fetch and preprocess data
-            this.updateLoadingStep('step-preprocessing', 'active');
-            const data = await this.fetchAnalysisData(config);
-            if (!data || data.length === 0) {
-                throw new Error('No data available for analysis');
+            let data;
+            
+            // Check if we have existing results (from execute dropdown)
+            if (config.existingResults) {
+                console.log('📊 Using existing query results for analysis');
+                this.updateLoadingStep('step-preprocessing', 'active');
+                
+                // Extract data from the existing Grafana query results
+                data = this.extractDataFromResults(config.existingResults);
+                if (!data || data.length === 0) {
+                    throw new Error('No data found in query results');
+                }
+            } else {
+                // Original flow: fetch data using config (for old sidebar UI)
+                this.updateLoadingStep('step-preprocessing', 'active');
+                data = await this.fetchAnalysisData(config);
+                if (!data || data.length === 0) {
+                    throw new Error('No data available for analysis');
+                }
             }
 
             // Step 2: Preprocess data for analysis type
@@ -351,8 +365,17 @@ const AIAnalytics = {
             whereClause += ` AND ${tagFilters}`;
         }
         
-        return `SELECT mean("${config.field}") as value 
-                FROM "${config.measurement}" 
+        // Use the user-specified aggregation function
+        const aggregation = config.aggregation || 'mean';
+        
+        // Handle retention policy in measurement name
+        // Format: "retention_policy"."measurement" or just "measurement"
+        const measurement = config.retentionPolicy ? 
+            `"${config.retentionPolicy}"."${config.measurement}"` : 
+            `"${config.measurement}"`;
+        
+        return `SELECT ${aggregation}("${config.field}") as value 
+                FROM ${measurement} 
                 WHERE ${whereClause}
                 GROUP BY time(${interval}) fill(none)`;
     },
@@ -385,6 +408,53 @@ const AIAnalytics = {
         return data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     },
 
+    // Extract data from Grafana query results format
+    extractDataFromResults(results) {
+        console.log('📊 Extracting data from Grafana results:', results);
+        
+        try {
+            // Handle Grafana query response format
+            if (results.results && results.results.A && results.results.A.frames) {
+                const frames = results.results.A.frames;
+                const extractedData = [];
+                
+                // Process each frame
+                frames.forEach(frame => {
+                    if (frame.data && frame.data.values && frame.data.values.length >= 2) {
+                        // Typically values[0] is time, values[1] is the metric value
+                        const timeValues = frame.data.values[0];
+                        const metricValues = frame.data.values[1];
+                        
+                        // Combine time and value pairs
+                        for (let i = 0; i < timeValues.length; i++) {
+                            if (metricValues[i] !== null && metricValues[i] !== undefined) {
+                                extractedData.push({
+                                    timestamp: new Date(timeValues[i]).toISOString(),
+                                    value: parseFloat(metricValues[i])
+                                });
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`📊 Extracted ${extractedData.length} data points from results`);
+                return extractedData;
+            }
+            
+            // If results are already in array format
+            if (Array.isArray(results)) {
+                return results;
+            }
+            
+            console.warn('⚠️ Unknown results format, returning empty array');
+            return [];
+            
+        } catch (error) {
+            console.error('❌ Error extracting data from results:', error);
+            return [];
+        }
+    },
+    
     // Data preprocessing for AI analysis
     preprocessData(rawData, analysisType) {
         console.log('🔄 Preprocessing data for analysis type:', analysisType);
@@ -1123,6 +1193,11 @@ The chart shows the complete time series - trust what you see in the image over 
     },
 
     inferMetricType(fieldName) {
+        // If no field name provided, just return generic description
+        if (!fieldName) {
+            return 'Time series metric';
+        }
+        
         const patterns = {
             'cpu': 'CPU utilization',
             'memory': 'Memory usage',
@@ -1140,7 +1215,7 @@ The chart shows the complete time series - trust what you see in the image over 
             }
         }
         
-        return 'Generic metric';
+        return 'Time series metric';
     },
 
     createUserFriendlyError(error) {

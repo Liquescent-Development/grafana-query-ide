@@ -68,11 +68,6 @@
                         <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
                     </svg>
                 </div>
-                <div class="activity-item" data-view="analytics" title="AI Analytics">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M9 3v2.01c-2.73.51-4.89 2.67-5.4 5.4H1v2h2.6c.51 2.73 2.67 4.89 5.4 5.4V20h2v-2.01c2.73-.51 4.89-2.67 5.4-5.4H18v-2h-2.6c-.51-2.73-2.67-4.89-5.4-5.4V3H9zm1 4.07c1.65.22 2.98 1.55 3.21 3.21l.79-.79 1.41 1.41-.79.79c-.22 1.65-1.55 2.98-3.21 3.21V16h-1v-1.1c-1.65-.22-2.98-1.55-3.21-3.21L6.41 12.5 5 11.09l.79-.79C6.01 8.65 7.35 7.32 9 7.1V6h1v1.07z"/>
-                    </svg>
-                </div>
                 <div class="activity-item" data-view="agent" title="AI Assistant">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/>
@@ -325,222 +320,7 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- AI Analytics Panel -->
-                        <div class="sidebar-panel" id="analyticsPanel">
-                            <div class="sidebar-header">
-                                <h3>AI ANALYTICS</h3>
-                            </div>
-                            <div class="sidebar-content">
-
-                                <!-- Data Configuration Section -->
-                                <div class="section-header">
-                                    <h4>DATA CONFIGURATION</h4>
-                                </div>
-                                
-                                <div class="form-section">
-                                    <div class="form-group">
-                                        <label>Data Source:</label>
-                                        <select id="analyticsDatasource" class="select-input" onchange="onAnalyticsDatasourceChange()">
-                                            <option value="">Select data source</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Retention Policy:</label>
-                                        <select id="analyticsRetentionPolicy" class="select-input">
-                                            <option value="raw" selected>raw (Default)</option>
-                                            <option value="autogen">autogen</option>
-                                            <option value="default">default</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Measurement:</label>
-                                        <select id="analyticsMeasurement" class="select-input">
-                                            <option value="">Select measurement...</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Field:</label>
-                                        <select id="analyticsField" class="select-input">
-                                            <option value="">Select field...</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Time Range:</label>
-                                        <select id="analyticsTimeRange" class="select-input">
-                                            <option value="1h">Last 1 Hour</option>
-                                            <option value="6h">Last 6 Hours</option>
-                                            <option value="1d" selected>Last 1 Day</option>
-                                            <option value="7d">Last 7 Days</option>
-                                            <option value="30d">Last 30 Days</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <!-- Tag Filtering Section -->
-                                <div class="section-header">
-                                    <h4>FILTERING & GROUPING</h4>
-                                </div>
-                                
-                                <div class="form-section">
-                                    <div class="form-group">
-                                        <label>Filter by Tags:</label>
-                                        <div id="tagFiltersContainer">
-                                            <div class="tag-filter-item">
-                                                <select class="tag-key-select select-input" onchange="onTagKeyChange(this)">
-                                                    <option value="">Select tag...</option>
-                                                </select>
-                                                <select class="tag-value-select select-input" disabled>
-                                                    <option value="">Select value...</option>
-                                                </select>
-                                                <button type="button" class="icon-button tag-filter-remove" onclick="removeTagFilter(this)" title="Remove filter">
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="secondary-button" onclick="addTagFilter()" style="margin-top: 8px;">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                                            </svg>
-                                            Add Tag Filter
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label>Group By:</label>
-                                        <div class="groupby-options">
-                                            <div class="form-group">
-                                                <label>
-                                                    <input type="checkbox" id="groupByTime" onchange="onGroupByChange()"> 
-                                                    Group by Time
-                                                </label>
-                                                <select id="timeGroupInterval" class="select-input" disabled>
-                                                    <option value="1m">1 minute</option>
-                                                    <option value="5m">5 minutes</option>
-                                                    <option value="15m">15 minutes</option>
-                                                    <option value="1h" selected>1 hour</option>
-                                                    <option value="6h">6 hours</option>
-                                                    <option value="1d">1 day</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>
-                                                    <input type="checkbox" id="groupByTags" onchange="onGroupByChange()"> 
-                                                    Group by Tags
-                                                </label>
-                                                <select id="groupByTagsSelect" class="select-input" multiple disabled>
-                                                    <option value="">No tags available</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Analysis Type Section -->
-                                <div class="section-header">
-                                    <h4>ANALYSIS TYPE</h4>
-                                </div>
-                                
-                                <div class="analysis-tabs">
-                                    <button class="tab-button active" data-analysis="anomaly">
-                                        ⚠️ Anomaly Detection
-                                    </button>
-                                    <button class="tab-button" data-analysis="prediction">
-                                        📈 Prediction
-                                    </button>
-                                    <button class="tab-button" data-analysis="trend">
-                                        📊 Trend Analysis
-                                    </button>
-                                </div>
-
-                                <!-- Visual Analysis Options -->
-                                <div class="visual-analysis-options">
-                                    <div class="form-group">
-                                        <label>
-                                            <input type="checkbox" id="useVisualMode" />
-                                            Visual Analysis Mode
-                                        </label>
-                                    </div>
-                                </div>
-
-                                    <!-- Anomaly Detection Options -->
-                                    <div id="anomalyOptions" class="analysis-options active">
-                                        <div class="form-group">
-                                            <label>Sensitivity:</label>
-                                            <select id="anomalySensitivity">
-                                                <option value="low">Low (Conservative)</option>
-                                                <option value="medium" selected>Medium</option>
-                                                <option value="high">High (Aggressive)</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Alert Threshold:</label>
-                                            <input type="range" id="alertThreshold" min="0.5" max="1.0" step="0.1" value="0.8">
-                                            <span id="thresholdValue">0.8</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Prediction Options -->
-                                    <div id="predictionOptions" class="analysis-options">
-                                        <div class="form-group">
-                                            <label>Forecast Horizon:</label>
-                                            <select id="forecastHorizon">
-                                                <option value="1h">1 Hour</option>
-                                                <option value="6h">6 Hours</option>
-                                                <option value="1d" selected>1 Day</option>
-                                                <option value="3d">3 Days</option>
-                                                <option value="7d">1 Week</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Confidence Level:</label>
-                                            <select id="confidenceLevel">
-                                                <option value="0.80">80%</option>
-                                                <option value="0.95" selected>95%</option>
-                                                <option value="0.99">99%</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <!-- Trend Analysis Options -->
-                                    <div id="trendOptions" class="analysis-options">
-                                        <div class="form-group">
-                                            <label>Analysis Depth:</label>
-                                            <select id="trendDepth">
-                                                <option value="basic">Basic Trends</option>
-                                                <option value="seasonal" selected>Include Seasonality</option>
-                                                <option value="advanced">Advanced Patterns</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="form-actions">
-                                    <button id="runAnalysis" class="primary-button" disabled>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M8 5v14l11-7z"/>
-                                        </svg>
-                                        Run Analysis
-                                    </button>
-                                    <button id="viewSavedAnalyses" class="secondary-button" onclick="Analytics.showSavedAnalyses()">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                                        </svg>
-                                        Saved Analyses
-                                    </button>
-                                    <button id="scheduleAnalysis" class="secondary-button" disabled>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zM12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                                        </svg>
-                                        Schedule
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Analytics results now shown in modal -->
-                        </div>
+                    </div>  <!-- Close sidebar -->
                     
                     <!-- Editor and Panel Area -->
                     <div class="editor-panel-area">
@@ -591,12 +371,46 @@
                                                 </select>
                                             </div>
                                             <div class="option-group">
-                                                <button class="execute-button" onclick="Interface.executeQuery('untitled-1')" disabled>
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                        <path d="M8 5v14l11-7z"/>
-                                                    </svg>
-                                                    Execute
-                                                </button>
+                                                <div class="execute-dropdown-container">
+                                                    <button class="execute-button" onclick="Interface.executeQuery('untitled-1')" disabled>
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                            <path d="M8 5v14l11-7z"/>
+                                                        </svg>
+                                                        Execute
+                                                    </button>
+                                                    <button class="execute-dropdown-arrow" onclick="toggleExecuteDropdown('untitled-1')" disabled>
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                                            <path d="M7 10l5 5 5-5z"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="execute-dropdown-menu" id="executeDropdown-untitled-1" style="display: none;">
+                                                        <div class="dropdown-item" onclick="Interface.executeQuery('untitled-1')">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M8 5v14l11-7z"/>
+                                                            </svg>
+                                                            Execute
+                                                        </div>
+                                                        <div class="dropdown-separator"></div>
+                                                        <div class="dropdown-item" onclick="Interface.executeWithAnalysis('untitled-1', 'anomaly')">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                                            </svg>
+                                                            Execute with Anomaly Detection
+                                                        </div>
+                                                        <div class="dropdown-item" onclick="Interface.executeWithAnalysis('untitled-1', 'prediction')">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+                                                            </svg>
+                                                            Execute with Prediction
+                                                        </div>
+                                                        <div class="dropdown-item" onclick="Interface.executeWithAnalysis('untitled-1', 'trend')">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/>
+                                                            </svg>
+                                                            Execute with Trend Analysis
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -614,6 +428,7 @@
                     <div class="panel-resizer"></div>
                     <div class="panel-tabs">
                         <div class="panel-tab active" data-panel="results">Results</div>
+                        <div class="panel-tab" data-panel="ai-analysis" style="display: none;">AI Analysis</div>
                         <div class="panel-tab" data-panel="variables">Variables</div>
                         <div class="panel-tab" data-panel="settings">Settings</div>
                         <button class="panel-close" onclick="togglePanel()" title="Close Panel">×</button>
@@ -624,6 +439,13 @@
                         <div class="panel-section active" id="resultsPanel">
                             <div id="results">
                                 <div class="empty-state">No query executed yet</div>
+                            </div>
+                        </div>
+
+                        <!-- AI Analysis Panel -->
+                        <div class="panel-section" id="aiAnalysisPanel" style="display: none;">
+                            <div id="aiAnalysisContent">
+                                <div class="empty-state">No AI analysis results yet</div>
                             </div>
                         </div>
 
@@ -654,11 +476,9 @@
                             </div>
                         </div>
                     </div>
-                    </div>
                 </div>
             </div>
-                </div>
-            </div>
+        </div>
         </div>
     </div>
 
