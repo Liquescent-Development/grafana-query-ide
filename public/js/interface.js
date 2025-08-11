@@ -2459,7 +2459,7 @@ async function connectToAiService(connectionId) {
             // Properly initialize Analytics connection with the connected service
             if (window.Analytics) {
                 // Call Analytics.initializeAiConnection to properly set up the connection
-                const initSuccess = await Analytics.initializeAiConnection(connection);
+                const initSuccess = await window.Analytics.initializeAiConnection(connection);
                 if (initSuccess) {
                     console.log('✅ Analytics AI connection initialized');
                 } else {
