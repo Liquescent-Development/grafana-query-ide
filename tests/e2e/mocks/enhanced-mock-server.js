@@ -807,7 +807,15 @@ class EnhancedMockServer {
         return res.status(400).json({ error: 'Missing model or prompt' });
       }
       
-      const response = this.generateContextualResponse(prompt);
+      // Check if this is an analysis request
+      const isAnalysisRequest = prompt.toLowerCase().includes('analyze') || 
+                               prompt.toLowerCase().includes('anomaly') ||
+                               prompt.toLowerCase().includes('trend') ||
+                               prompt.toLowerCase().includes('forecast');
+      
+      const response = isAnalysisRequest 
+        ? this.generateAnalysisResponse(prompt)
+        : this.generateContextualResponse(prompt);
       
       res.json({
         model: model,
@@ -947,6 +955,94 @@ class EnhancedMockServer {
     );
   }
   
+  generateAnalysisResponse(prompt) {
+    const promptLower = prompt.toLowerCase();
+    
+    if (promptLower.includes('anomaly')) {
+      return `## Anomaly Detection Analysis
+
+### Key Findings:
+1. **Significant Spike Detected** at 14:32:00
+   - Value: 95.2% (Normal range: 40-60%)
+   - Duration: 5 minutes
+   - Severity: High
+   - Possible cause: Resource contention or process surge
+
+2. **Unusual Pattern** at 16:45:00
+   - Gradual increase over 30 minutes
+   - Peak value: 78%
+   - Pattern suggests memory leak or cache buildup
+
+### Recommendations:
+- Set up alert for values > 80%
+- Investigate process logs during spike periods
+- Consider implementing auto-scaling
+
+### Statistical Summary:
+- Anomalies detected: 2
+- Confidence level: 92%
+- False positive rate: < 5%`;
+    }
+    
+    if (promptLower.includes('trend')) {
+      return `## Trend Analysis
+
+### Overall Trend:
+- **Direction**: Increasing
+- **Rate**: +2.3% per hour
+- **Confidence**: 87%
+
+### Pattern Components:
+1. **Daily Pattern**: Peak usage 14:00-16:00
+2. **Weekly Pattern**: Highest on Wednesdays
+3. **Monthly Trend**: 15% growth month-over-month
+
+### Forecast:
+- Next 24 hours: Expected range 45-65%
+- Next 7 days: Gradual increase to 70%
+- Risk of exceeding threshold: 35%`;
+    }
+    
+    if (promptLower.includes('forecast') || promptLower.includes('prediction')) {
+      return `## Predictive Analysis
+
+### Forecast Results:
+- **Next 1 hour**: 52.3% ± 3.2%
+- **Next 6 hours**: 58.7% ± 5.1%
+- **Next 24 hours**: 61.2% ± 7.8%
+
+### Model Performance:
+- Algorithm: ARIMA with seasonal decomposition
+- MAPE: 4.2%
+- R²: 0.89
+
+### Risk Assessment:
+- Probability of exceeding 80%: 12%
+- Expected peak: 16:00 tomorrow (68%)
+- Recommended action threshold: 75%`;
+    }
+    
+    // Default analysis response
+    return `## Time Series Analysis
+
+### Summary Statistics:
+- Mean: 55.3%
+- Median: 54.8%
+- Std Dev: 12.4%
+- Min: 32.1%
+- Max: 95.2%
+
+### Key Observations:
+1. Data shows regular periodic patterns
+2. Overall trend is stable with minor fluctuations
+3. No critical issues detected
+
+### Recommendations:
+- Continue monitoring current metrics
+- Consider setting baseline alerts at ±2 standard deviations
+- Review data collection frequency for optimization`;
+  }
+
   generateContextualResponse(prompt) {
     const promptLower = prompt.toLowerCase();
     

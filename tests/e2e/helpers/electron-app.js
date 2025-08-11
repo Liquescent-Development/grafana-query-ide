@@ -139,9 +139,29 @@ class ElectronApp {
   async connectToMockAI(provider = 'ollama') {
     // Switch to agent view
     await this.click('[data-view="agent"]');
+    await this.window.waitForTimeout(500);
     
-    // Open AI connection dialog
-    await this.click('button[onclick*="showNewAiConnectionDialog"]');
+    // Open AI connection dialog - handle multiple buttons
+    const buttons = await this.window.$$('button[onclick*="showNewAiConnectionDialog"]');
+    if (buttons.length > 0) {
+      // Find the visible one
+      for (const button of buttons) {
+        const isVisible = await button.isVisible();
+        if (isVisible) {
+          await button.click();
+          break;
+        }
+      }
+    } else {
+      // Fallback: try direct onclick
+      await this.window.evaluate(() => {
+        if (typeof showNewAiConnectionDialog === 'function') {
+          showNewAiConnectionDialog();
+        }
+      });
+    }
+    
+    await this.window.waitForTimeout(500);
     
     if (provider === 'ollama') {
       await this.window.selectOption('#aiProvider', 'ollama');
