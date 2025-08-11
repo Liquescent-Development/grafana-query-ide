@@ -13,7 +13,8 @@ const AIAnalytics = {
     prompts: {
         systemPrompt: `You are a specialized time series analyst with expertise in InfluxDB metrics and system monitoring. 
         You analyze time series data for anomalies, predictions, and trends using statistical reasoning and domain knowledge.
-        Always respond with valid JSON only, no additional text or explanations outside the JSON structure.
+        CRITICAL: You MUST respond with valid JSON only. Do not include any text before or after the JSON. Start your response with { and end with }.
+        No explanations, no markdown, no commentary - ONLY valid JSON.
         Use your knowledge of system metrics, seasonality patterns, and anomaly detection techniques.`,
 
         anomalyDetection: `
@@ -28,9 +29,12 @@ const AIAnalytics = {
         Mean: {mean}, StdDev: {stdDev}
         Normal Range: {normalRangeLower} to {normalRangeUpper}
 
-        DATA:
+        DATA (format: timestamp=ISO8601, value=numeric):
         {dataPoints}
 
+        IMPORTANT: The data format is "timestamp=<ISO8601 date>, value=<number>". 
+        Extract the numeric value after "value=" for analysis. Do NOT use the timestamp year or any part of the date as the data value.
+        
         CRITICAL INSTRUCTION: Look for values that are dramatically higher or lower than the normal range. Any value that is 5x or more above the normal range should be flagged as CRITICAL. Any value that is 3x or more above the normal range should be flagged as HIGH severity.
 
         Find continuous time intervals that deviate significantly from the normal pattern:
@@ -55,7 +59,8 @@ const AIAnalytics = {
         - medium: 2-3 sigma deviation OR 2-3x normal range
         - low: 1.5-2 sigma deviation OR 1.5-2x normal range
 
-        Return JSON with anomalous intervals:
+        IMPORTANT: Return ONLY valid JSON, no other text. Your response must start with { and end with }
+        Return this exact JSON structure:
         {
           "anomalies": [
             {
@@ -63,7 +68,7 @@ const AIAnalytics = {
               "end_time": "2024-01-01T12:15:00Z",
               "severity": "critical",
               "type": "massive_spike",
-              "peak_value": 12500,
+              "peak_value": 125.5,
               "score": 0.95
             }
           ],
@@ -72,7 +77,8 @@ const AIAnalytics = {
             "severity_distribution": {"critical": 1, "high": 2, "medium": 2, "low": 0},
             "analysis_confidence": 0.85
           }
-        }`,
+        }
+        Remember: ONLY JSON, no explanations or text before/after the JSON.`,
 
         prediction: `
         Forecast future values for this time series based on historical patterns:
@@ -84,8 +90,10 @@ const AIAnalytics = {
         - Forecast Horizon: {forecastHorizon}
         - Seasonality Information: {seasonalityInfo}
 
-        HISTORICAL DATA:
+        HISTORICAL DATA (format: timestamp=ISO8601, value=numeric):
         {historicalData}
+        
+        IMPORTANT: Extract the numeric value after "value=" for analysis.
 
         RECENT TRENDS:
         {recentTrends}
@@ -136,8 +144,10 @@ const AIAnalytics = {
         trendAnalysis: `
         Analyze trends and patterns in this time series data:
 
-        DATA:
+        DATA (format: timestamp=ISO8601, value=numeric):
         {timeSeriesData}
+        
+        IMPORTANT: Extract the numeric value after "value=" for analysis.
 
         CONTEXT:
         - Metric Type: {metricType}
@@ -252,11 +262,25 @@ const AIAnalytics = {
         console.log('🤖 Starting AI analysis...', config);
         
         try {
-            // Step 1: Fetch and preprocess data
-            this.updateLoadingStep('step-preprocessing', 'active');
-            const data = await this.fetchAnalysisData(config);
-            if (!data || data.length === 0) {
-                throw new Error('No data available for analysis');
+            let data;
+            
+            // Check if we have existing results (from execute dropdown)
+            if (config.existingResults) {
+                console.log('📊 Using existing query results for analysis');
+                this.updateLoadingStep('step-preprocessing', 'active');
+                
+                // Extract data from the existing Grafana query results
+                data = this.extractDataFromResults(config.existingResults);
+                if (!data || data.length === 0) {
+                    throw new Error('No data found in query results');
+                }
+            } else {
+                // Original flow: fetch data using config (for old sidebar UI)
+                this.updateLoadingStep('step-preprocessing', 'active');
+                data = await this.fetchAnalysisData(config);
+                if (!data || data.length === 0) {
+                    throw new Error('No data available for analysis');
+                }
             }
 
             // Step 2: Preprocess data for analysis type
@@ -341,8 +365,17 @@ const AIAnalytics = {
             whereClause += ` AND ${tagFilters}`;
         }
         
-        return `SELECT mean("${config.field}") as value 
-                FROM "${config.measurement}" 
+        // Use the user-specified aggregation function
+        const aggregation = config.aggregation || 'mean';
+        
+        // Handle retention policy in measurement name
+        // Format: "retention_policy"."measurement" or just "measurement"
+        const measurement = config.retentionPolicy ? 
+            `"${config.retentionPolicy}"."${config.measurement}"` : 
+            `"${config.measurement}"`;
+        
+        return `SELECT ${aggregation}("${config.field}") as value 
+                FROM ${measurement} 
                 WHERE ${whereClause}
                 GROUP BY time(${interval}) fill(none)`;
     },
@@ -375,6 +408,53 @@ const AIAnalytics = {
         return data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     },
 
+    // Extract data from Grafana query results format
+    extractDataFromResults(results) {
+        console.log('📊 Extracting data from Grafana results:', results);
+        
+        try {
+            // Handle Grafana query response format
+            if (results.results && results.results.A && results.results.A.frames) {
+                const frames = results.results.A.frames;
+                const extractedData = [];
+                
+                // Process each frame
+                frames.forEach(frame => {
+                    if (frame.data && frame.data.values && frame.data.values.length >= 2) {
+                        // Typically values[0] is time, values[1] is the metric value
+                        const timeValues = frame.data.values[0];
+                        const metricValues = frame.data.values[1];
+                        
+                        // Combine time and value pairs
+                        for (let i = 0; i < timeValues.length; i++) {
+                            if (metricValues[i] !== null && metricValues[i] !== undefined) {
+                                extractedData.push({
+                                    timestamp: new Date(timeValues[i]).toISOString(),
+                                    value: parseFloat(metricValues[i])
+                                });
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`📊 Extracted ${extractedData.length} data points from results`);
+                return extractedData;
+            }
+            
+            // If results are already in array format
+            if (Array.isArray(results)) {
+                return results;
+            }
+            
+            console.warn('⚠️ Unknown results format, returning empty array');
+            return [];
+            
+        } catch (error) {
+            console.error('❌ Error extracting data from results:', error);
+            return [];
+        }
+    },
+    
     // Data preprocessing for AI analysis
     preprocessData(rawData, analysisType) {
         console.log('🔄 Preprocessing data for analysis type:', analysisType);
@@ -499,7 +579,7 @@ const AIAnalytics = {
         if (data.length <= optimalSize) {
             // Small dataset: include all points
             return data.map(point => 
-                `${point.timestamp}: ${point.value}`
+                `timestamp=${point.timestamp}, value=${point.value}`
             ).join('\n');
         }
         
@@ -559,12 +639,12 @@ const AIAnalytics = {
             finalSamples.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
             
             return finalSamples.map(point => 
-                `${point.timestamp}: ${point.value}`
+                `timestamp=${point.timestamp}, value=${point.value}`
             ).join('\n');
         }
         
         return samples.map(point => 
-            `${point.timestamp}: ${point.value}`
+            `timestamp=${point.timestamp}, value=${point.value}`
         ).join('\n');
     },
 
@@ -783,13 +863,28 @@ const AIAnalytics = {
         const provider = activeConnection?.provider || 'ollama';
         
         console.log('🤖 Using AI provider:', provider);
+        console.log('🔍 Active connection:', activeConnection);
         
         if (provider === 'openai') {
+            console.log('🔍 OpenAI check:', {
+                exists: typeof OpenAIService !== 'undefined',
+                isConnected: window.OpenAIService?.isConnected
+            });
             if (typeof OpenAIService === 'undefined' || !OpenAIService.isConnected) {
                 throw new Error('OpenAI service not available or not connected');
             }
         } else {
+            console.log('🔍 Ollama check:', {
+                exists: typeof OllamaService !== 'undefined',
+                isConnected: window.OllamaService?.isConnected,
+                globalOllama: window.OllamaService
+            });
             if (typeof OllamaService === 'undefined' || !OllamaService.isConnected) {
+                console.error('🔴 Ollama not connected!', {
+                    typeofCheck: typeof OllamaService,
+                    isConnectedCheck: OllamaService?.isConnected,
+                    windowCheck: window.OllamaService?.isConnected
+                });
                 throw new Error('Ollama service not available or not connected');
             }
         }
@@ -810,7 +905,8 @@ const AIAnalytics = {
         if (provider === 'openai') {
             isVisionCapable = this.isVisionModel(modelName);
         } else {
-            const ollamaEndpoint = config.ollamaEndpoint || 'http://localhost:11434';
+            // Use actual connected endpoint, not hardcoded localhost
+            const ollamaEndpoint = window.OllamaService?.config?.endpoint || config.ollamaEndpoint || 'http://localhost:11434';
             isVisionCapable = await this.isVisionModelFromAPI(modelName, ollamaEndpoint);
         }
         
@@ -943,7 +1039,34 @@ The chart shows the complete time series - trust what you see in the image over 
             }
             console.error('📝 Response text (first 2000 chars):', typeof responseText === 'string' ? responseText.substring(0, 2000) : responseText);
             
-            throw new Error(`AI returned invalid JSON response. This usually means the response was truncated due to token limits. Try increasing 'Response Tokens (num_predict)' in settings. Error: ${error.message}`);
+            // Check if response looks like it's not JSON at all
+            // Allow responses that start with { OR markdown code blocks (```json or ```)
+            const trimmed = responseText.trim();
+            const looksLikeJson = trimmed.startsWith('{') || 
+                                 trimmed.startsWith('```json') || 
+                                 trimmed.startsWith('```');
+            
+            if (typeof responseText === 'string' && !looksLikeJson) {
+                // Get model info for better error message
+                const modelUsed = config.selectedModel || GrafanaConfig.selectedModel || 'unknown';
+                throw new Error(`The AI model (${modelUsed}) did not return JSON as requested. It returned: "${responseText.substring(0, 100)}...". This model may not be suitable for structured analysis. Try using a different model like llama3.1, mistral, or mixtral which better follow JSON output instructions.`);
+            }
+            
+            // Provide helpful guidance based on the error
+            const modelUsed = config.selectedModel || GrafanaConfig.selectedModel || 'unknown';
+            const numCtx = config.numCtx || 8192;
+            
+            let errorMsg = `AI returned invalid JSON response. `;
+            
+            // Check if num_ctx might be too high
+            if (numCtx > 16384) {
+                errorMsg += `Your Context Size (num_ctx) is set to ${numCtx} which may be too large for your GPU memory. Try reducing it to 8192 or lower. `;
+            } else {
+                errorMsg += `This usually means the response was truncated. Try adjusting 'Response Tokens (num_predict)' or reducing 'Context Size (num_ctx)' in settings. `;
+            }
+            errorMsg += `Error: ${error.message}`;
+            
+            throw new Error(errorMsg);
         }
     },
 
@@ -955,6 +1078,14 @@ The chart shows the complete time series - trust what you see in the image over 
         }
 
         console.log('🔍 Validating severity distribution...');
+        
+        // Fix missing severity fields in anomalies
+        parsed.anomalies.forEach(anomaly => {
+            if (!anomaly.severity) {
+                console.warn('⚠️ Anomaly missing severity field, setting to unknown:', anomaly);
+                anomaly.severity = 'unknown';
+            }
+        });
         
         // Check if summary exists, create if missing
         if (!parsed.summary) {
@@ -1062,6 +1193,11 @@ The chart shows the complete time series - trust what you see in the image over 
     },
 
     inferMetricType(fieldName) {
+        // If no field name provided, just return generic description
+        if (!fieldName) {
+            return 'Time series metric';
+        }
+        
         const patterns = {
             'cpu': 'CPU utilization',
             'memory': 'Memory usage',
@@ -1079,7 +1215,7 @@ The chart shows the complete time series - trust what you see in the image over 
             }
         }
         
-        return 'Generic metric';
+        return 'Time series metric';
     },
 
     createUserFriendlyError(error) {

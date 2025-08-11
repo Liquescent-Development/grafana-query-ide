@@ -35,9 +35,33 @@ const App = {
         if (typeof Storage !== 'undefined') {
             Storage.clearExpiredSchemaCache();
         }
+        
+        // Initialize AI Agent
+        if (typeof AIAgent !== 'undefined') {
+            console.log('Initializing AI Agent...');
+            AIAgent.initialize();
+        }
+        
+        // Listen for IPC messages from pop-out chat window (Electron only)
+        this.setupElectronListeners();
     },
     
     // Set default application state
+    // Setup Electron-specific listeners
+    setupElectronListeners() {
+        if (window.electronAPI && window.electronAPI.onOpenQueryInEditor) {
+            console.log('🔌 Setting up Electron listeners for AI query integration');
+            
+            // Listen for queries from pop-out chat window
+            window.electronAPI.onOpenQueryInEditor((queryData) => {
+                console.log('📝 Received query from chat window:', queryData);
+                if (typeof Interface !== 'undefined' && Interface.openAIGeneratedQuery) {
+                    Interface.openAIGeneratedQuery(queryData);
+                }
+            });
+        }
+    },
+    
     setDefaultApplicationState() {
         // Set default query type
         GrafanaConfig.currentQueryType = 'influxql';
@@ -50,6 +74,25 @@ const App = {
         
         // Check for saved connections and load them
         this.loadSavedConnections();
+        
+        // Update AI status after a delay to ensure services are loaded
+        // NOTE: We do NOT automatically restore AI connections on startup
+        // AI connections should only be made when user explicitly connects
+        setTimeout(() => {
+            // Just update the title bar to show disconnected state
+            if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
+                window.Analytics.updateTitleBarStatus();
+            }
+            
+            // Clear any stale ACTIVE_AI_CONNECTION from storage
+            if (Storage && Storage.remove) {
+                const activeConnectionId = Storage && Storage.get ? Storage.get('ACTIVE_AI_CONNECTION') : null;
+                if (activeConnectionId) {
+                    console.log('🧹 Clearing stale active AI connection from storage');
+                    Storage.remove('ACTIVE_AI_CONNECTION');
+                }
+            }
+        }, 1000);
     },
     
     updateTitleBarStatus() {
@@ -508,10 +551,13 @@ function onSchemaDatasourceChange() {
     const select = document.getElementById('schemaDatasourceSelect');
     if (!select || !select.value) return;
     
-    // Find the datasource item and simulate a click
-    const datasourceItem = document.querySelector(`[data-uid="${select.value}"]`);
-    if (datasourceItem) {
-        datasourceItem.click();
+    // Get the selected option details
+    const selectedOption = select.selectedOptions[0];
+    if (selectedOption && window.Schema) {
+        // Set the current datasource info and trigger schema loading
+        Schema.currentDatasourceId = selectedOption.value;
+        Schema.currentDatasourceType = selectedOption.dataset.type;
+        Schema.loadSchemaIfNeeded();
     }
 }
 
@@ -590,6 +636,9 @@ window.onload = function() {
         FileExplorer.initialize();
     }
     
+    // Advanced AI System will be initialized when user connects to an AI service
+    // We do NOT automatically initialize it on startup
+    console.log('💡 Advanced AI System ready - will initialize when AI service is connected by user');
     
     // Expose debug functions to global scope for console access
     window.debugStorage = Storage.debugLocalStorage.bind(Storage);

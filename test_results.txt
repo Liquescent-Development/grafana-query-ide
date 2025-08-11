@@ -1,0 +1,132 @@
+
+> time-buddy@0.3.8 test
+> node tests/test-runner-cli.js
+
+✅ Node.js mocks initialized
+✅ Mock responses initialized
+✅ Test data fixtures initialized
+✅ Node.js mocks initialized
+✅ Node.js test setup initialized
+✅ Test utilities initialized
+[1m[36mTime Buddy Test Suite[0m
+[36m=====================[0m
+
+[1m[34mrequest() method[0m
+  [32m✓ should handle proxy requests in web mode[0m [2m(12ms)[0m
+  [32m✓ should handle electron requests in electron mode[0m [2m(11ms)[0m
+  [32m✓ should throw error when configuration is missing[0m
+  [31m✗ should include auth token in headers when available[0m [2m(11ms)[0m
+    [31mTypeError: expect.objectContaining is not a function[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:120:37)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+    [31m    at async CLITestRunner.runTests (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:675:13)[0m
+  [31m✗ should handle JSON body serialization[0m [2m(11ms)[0m
+    [31mTypeError: expect.objectContaining is not a function[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:149:24)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+    [31m    at async CLITestRunner.runTests (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:675:13)[0m
+  [31m✗ should handle string body as-is[0m [2m(11ms)[0m
+    [31mTypeError: expect.objectContaining is not a function[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:177:24)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+    [31m    at async CLITestRunner.runTests (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:675:13)[0m
+
+[1m[34mexecuteQuery() method[0m
+  [32m✓ should execute InfluxDB query successfully[0m [2m(11ms)[0m
+  [31m✗ should execute Prometheus query successfully[0m [2m(11ms)[0m
+    [31mError: Expected value to be defined[0m
+    [31m    at Object.toBeDefined (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:548:27)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:229:33)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [32m✓ should throw error when datasourceId is missing[0m
+  [32m✓ should throw error when query is missing[0m
+  [31m✗ should use QueryRequestBuilder to build request[0m [2m(12ms)[0m
+    [31mTypeError: expect.any is not a function[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:280:24)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+    [31m    at async CLITestRunner.runTests (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:675:13)[0m
+  [31m✗ should handle query execution errors gracefully[0m [2m(11ms)[0m
+    [31mError: Expected string to contain "Query execution failed"[0m
+    [31m    at Object.toContain (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:447:31)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:300:39)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+
+[1m[34mgetSchema() method[0m
+  [32m✓ should get InfluxDB databases[0m [2m(11ms)[0m
+  [31m✗ should get InfluxDB measurements[0m [2m(11ms)[0m
+    [31mError: Expected array to contain "cpu"[0m
+    [31m    at Object.toContain (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:443:31)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:363:28)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [31m✗ should get InfluxDB fields[0m [2m(11ms)[0m
+    [31mError: Expected array to contain "usage_active"[0m
+    [31m    at Object.toContain (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:443:31)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:388:28)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [31m✗ should get Prometheus metrics[0m [2m(11ms)[0m
+    [31mError: Expected 0 to be greater than 0[0m
+    [31m    at Object.toBeGreaterThan (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:557:27)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:408:35)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [31m✗ should get Prometheus labels[0m [2m(11ms)[0m
+    [31mError: Expected 0 to be greater than 0[0m
+    [31m    at Object.toBeGreaterThan (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:557:27)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:430:35)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [32m✓ should throw error for unknown schema type[0m
+  [32m✓ should require datasourceId and schemaType[0m
+
+[1m[34mgetDataSourceType() method[0m
+  [32m✓ should return datasource type[0m [2m(11ms)[0m
+
+[1m[34m_processQueryResult() method[0m
+  [32m✓ should return raw result when raw option is true[0m
+  [32m✓ should process InfluxDB result format[0m [2m(1ms)[0m
+  [32m✓ should process Prometheus result format[0m
+
+[1m[34m_extractInfluxValues() method[0m
+  [32m✓ should extract values from InfluxDB response[0m
+  [32m✓ should return empty array for invalid result[0m
+  [32m✓ should filter out null/undefined values[0m
+
+[1m[34m_standardizeError() method[0m
+  [32m✓ should create standardized error with context[0m
+  [32m✓ should handle error objects with response data[0m
+  [32m✓ should handle string errors[0m
+
+[1m[34mError Handling[0m
+  [31m✗ should handle network timeout errors[0m [2m(11ms)[0m
+    [31mError: Expected string to contain "Query execution failed"[0m
+    [31m    at Object.toContain (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:447:31)[0m
+    [31m    at Object.eval [as testFunction] (eval at loadModule (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:280:17), <anonymous>:628:39)[0m
+    [31m    at async CLITestRunner.runTest (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:746:13)[0m
+    [31m    at async CLITestRunner.runSuite (/Users/kiener/code/time-buddy/tests/test-runner-cli.js:689:17)[0m
+  [32m✓ should handle malformed response data[0m [2m(11ms)[0m
+
+[1m[34mConfiguration Validation[0m
+  [32m✓ should validate required configuration properties[0m
+
+[1m[34mDataAccess Module[0m
+
+[1m[34mNetwork Errors[0m
+/Users/kiener/code/time-buddy/tests/test-runner-cli.js:468
+                                throw new Error('Expected function to throw an error, but it resolved');
+                                      ^
+
+Error: Expected function to throw an error, but it resolved
+    at /Users/kiener/code/time-buddy/tests/test-runner-cli.js:468:39
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at listOnTimeout (node:internal/timers:549:9)
+    at process.processTimers (node:internal/timers:523:7)
+
+Node.js v22.17.0

@@ -44,7 +44,7 @@ const TimeSeriesProcessor = {
         const optimalInterval = this.calculateOptimalInterval(timeRange, maxPoints);
         
         // Build base aggregation
-        const aggregationFunc = this.getAggregationFunction(config.field, config.analysisType);
+        const aggregationFunc = this.getAggregationFunction(config.field, config.analysisType, config.aggregation);
         
         // Build tag filters
         const tagFilters = this.buildTagFilters(config.tags);
@@ -137,7 +137,13 @@ const TimeSeriesProcessor = {
     },
 
     // Get appropriate aggregation function
-    getAggregationFunction(fieldName, analysisType = 'anomaly') {
+    getAggregationFunction(fieldName, analysisType = 'anomaly', userAggregation = null) {
+        // If user specified an aggregation, use it
+        if (userAggregation) {
+            return userAggregation;
+        }
+        
+        // Otherwise fall back to smart defaults
         const fieldLower = fieldName.toLowerCase();
         
         // Field-specific aggregations
@@ -196,8 +202,17 @@ const TimeSeriesProcessor = {
         });
         
         try {
-            // Use direct API call approach (Queries.executeQuery doesn't accept parameters)
-            return await this.executeDirectQuery(query, config);
+            // Use centralized query execution
+            if (typeof Queries !== 'undefined' && Queries.executeQueryDirect) {
+                const result = await Queries.executeQueryDirect(query, {
+                    datasourceType: GrafanaConfig.selectedDatasourceType,
+                    timeFromHours: config.timeRangeHours || 24,
+                    maxDataPoints: config.maxDataPoints || 1000
+                });
+                return this.extractTimeSeriesData(result);
+            } else {
+                throw new Error('Centralized query system not available');
+            }
             
         } catch (error) {
             console.error('Query execution failed:', error);
@@ -205,35 +220,6 @@ const TimeSeriesProcessor = {
         }
     },
 
-    // Direct query execution fallback
-    async executeDirectQuery(query, config) {
-        console.log('🔗 Executing direct API query...');
-        
-        const requestBody = this.buildQueryRequest(query, config);
-        console.log('📝 Direct API request body:', JSON.stringify(requestBody, null, 2));
-        
-        // Use the same URL pattern as the Queries module
-        const requestId = Math.random().toString(36).substr(2, 9);
-        const urlParams = GrafanaConfig.selectedDatasourceType === 'influxdb' ? 
-            `?ds_type=influxdb&requestId=${requestId}` : 
-            `?ds_type=prometheus&requestId=${requestId}`;
-        
-        const response = await API.makeApiRequest('/api/ds/query' + urlParams, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Query failed: ${response.statusText} - ${errorText}`);
-        }
-        
-        const result = await response.json();
-        console.log('📊 Direct API response:', result);
-        
-        return this.extractTimeSeriesData(result);
-    },
 
     // Build query request object
     buildQueryRequest(query, config) {

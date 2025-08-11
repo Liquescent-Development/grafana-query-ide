@@ -56,7 +56,13 @@ const Interface = {
         document.querySelectorAll('.sidebar-panel').forEach(panel => {
             panel.classList.remove('active');
         });
-        document.getElementById(`${view}Panel`).classList.add('active');
+        const panel = document.getElementById(`${view}Panel`);
+        if (panel) {
+            panel.classList.add('active');
+        } else {
+            console.warn(`Panel not found for view: ${view}`);
+            return;
+        }
         
         // Deactivate all panel sections first (except results panel)
         document.querySelectorAll('.panel-section:not(#resultsPanel)').forEach(section => {
@@ -103,9 +109,28 @@ const Interface = {
             case 'history':
                 this.loadHistory();
                 break;
-            case 'analytics':
-                this.loadAnalytics();
+            case 'agent':
+                // Show AI Agent panel (don't auto-open chat)
+                this.updateAgentPanel();
                 break;
+        }
+    },
+
+    // Update AI Agent panel status
+    updateAgentPanel() {
+        const statusIndicator = document.getElementById('aiAssistantStatus');
+        if (statusIndicator) {
+            // Check if AI service is connected
+            const isAiConnected = window.Analytics && Analytics.isConnected;
+            const isGrafanaConnected = GrafanaConfig.connected;
+            
+            if (isAiConnected && isGrafanaConnected) {
+                statusIndicator.className = 'status-indicator connected';
+            } else if (isGrafanaConnected) {
+                statusIndicator.className = 'status-indicator offline';
+            } else {
+                statusIndicator.className = 'status-indicator disconnected';
+            }
         }
     },
 
@@ -155,6 +180,60 @@ const Interface = {
         this.switchTab('untitled-1');
     },
 
+    // Open AI-generated query in a new tab
+    openAIGeneratedQuery(queryData) {
+        console.log('📝 Opening AI-generated query in new tab:', queryData);
+        
+        // Create a new tab
+        const tabId = this.createNewTab();
+        
+        // Wait for tab to be ready, then set content
+        setTimeout(() => {
+            const tabData = this.tabs.get(tabId);
+            if (tabData && tabData.editor) {
+                // Set the query text
+                tabData.editor.setValue(queryData.query);
+                
+                // Set query type if available
+                if (queryData.queryType) {
+                    // Update the query type selector if it exists
+                    const queryTypeSelector = document.querySelector(`#tab-${tabId} .query-type-selector`);
+                    if (queryTypeSelector) {
+                        queryTypeSelector.value = queryData.queryType;
+                    }
+                    
+                    // Update CodeMirror mode
+                    if (queryData.queryType === 'promql') {
+                        tabData.editor.setOption('mode', 'promql');
+                    } else {
+                        tabData.editor.setOption('mode', 'text/x-sql');
+                    }
+                }
+                
+                // Try to set datasource if available
+                if (queryData.datasourceName) {
+                    // Look for matching datasource in connections
+                    const connections = Storage.getSavedConnections();
+                    for (const [id, connection] of Object.entries(connections)) {
+                        if (connection.name === queryData.datasourceName) {
+                            // Found matching datasource - connect to it
+                            Connections.connectToSavedConnection(id);
+                            break;
+                        }
+                    }
+                }
+                
+                // Focus the new tab
+                this.focusTab(tabId);
+                
+                // Show a notification
+                Utils.showNotification('Query opened in new tab', 'success');
+            }
+        }, 100);
+        
+        return tabId;
+    },
+    
     createNewTab() {
         this.tabCounter++;
         const tabId = `untitled-${this.tabCounter}`;
@@ -276,12 +355,46 @@ const Interface = {
                         </select>
                     </div>
                     <div class="option-group">
-                        <button class="execute-button" onclick="Interface.executeQuery('${tabId}')" disabled>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                            Execute
-                        </button>
+                        <div class="execute-dropdown-container">
+                            <button class="execute-button" onclick="Interface.executeQuery('${tabId}')" disabled>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                Execute
+                            </button>
+                            <button class="execute-dropdown-arrow" onclick="toggleExecuteDropdown('${tabId}')" disabled>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7 10l5 5 5-5z"/>
+                                </svg>
+                            </button>
+                            <div class="execute-dropdown-menu" id="executeDropdown-${tabId}" style="display: none;">
+                                <div class="dropdown-item" onclick="Interface.executeQuery('${tabId}')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    Execute
+                                </div>
+                                <div class="dropdown-separator"></div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'anomaly')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                    </svg>
+                                    Execute with Anomaly Detection
+                                </div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'prediction')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+                                    </svg>
+                                    Execute with Prediction
+                                </div>
+                                <div class="dropdown-item" onclick="Interface.executeWithAnalysis('${tabId}', 'trend')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/>
+                                    </svg>
+                                    Execute with Trend Analysis
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -750,13 +863,22 @@ const Interface = {
         document.querySelectorAll('.panel-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        document.querySelector(`[data-panel="${panelName}"]`).classList.add('active');
+        const targetTab = document.querySelector(`[data-panel="${panelName}"]`);
+        if (targetTab) {
+            targetTab.classList.add('active');
+        }
 
         // Update active panel content
         document.querySelectorAll('.panel-section').forEach(section => {
             section.classList.remove('active');
+            section.style.display = 'none';
         });
-        document.getElementById(`${panelName}Panel`).classList.add('active');
+        
+        const targetPanel = document.getElementById(`${panelName}Panel`);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+            targetPanel.style.display = 'block';
+        }
 
         this.activePanel = panelName;
     },
@@ -933,6 +1055,11 @@ const Interface = {
             console.log('After timeout - connectionList contains:', connectionList.innerHTML.length, 'characters');
             console.log('Connection items found:', connectionList.querySelectorAll('.connection-item').length);
         }, 50);
+        
+        // Also load AI connections
+        if (typeof loadAiConnections === 'function') {
+            loadAiConnections();
+        }
     },
 
     loadDataSources() {
@@ -1043,7 +1170,7 @@ const Interface = {
             document.body.appendChild(tempIntervalMs);
             document.body.appendChild(tempInstantQuery);
             
-            Queries.executeQuery().then(() => {
+            return Queries.executeQuery().then(() => {
                 // Restore original function and clean up
                 Editor.getQueryValue = originalGetQueryValue;
                 document.body.removeChild(tempSelect);
@@ -1199,19 +1326,26 @@ const Interface = {
             console.log('updateExecuteButton - tabContainer found:', !!tabContainer, 'tabData found:', !!tabData);
             if (tabContainer && tabData) {
                 const executeBtn = tabContainer.querySelector('.execute-button');
+                const executeDropdownArrow = tabContainer.querySelector('.execute-dropdown-arrow');
                 console.log('updateExecuteButton - executeBtn found:', !!executeBtn);
+                console.log('updateExecuteButton - executeDropdownArrow found:', !!executeDropdownArrow);
                 console.log('updateExecuteButton - tabContainer innerHTML length:', tabContainer.innerHTML.length);
                 console.log('updateExecuteButton - tabContainer has execute-button class:', tabContainer.innerHTML.includes('execute-button'));
+                
+                const isEnabled = GrafanaConfig.connected && tabData.datasourceId;
+                
                 if (executeBtn) {
                     console.log('updateExecuteButton for tab:', tabId, 'connected:', GrafanaConfig.connected, 'datasourceId:', tabData.datasourceId);
-                    if (GrafanaConfig.connected && tabData.datasourceId) {
-                        executeBtn.disabled = false;
-                        console.log('Execute button enabled for tab:', tabId);
-                    } else {
-                        executeBtn.disabled = true;
-                        console.log('Execute button disabled for tab:', tabId);
-                    }
-                } else {
+                    executeBtn.disabled = !isEnabled;
+                    console.log('Execute button', isEnabled ? 'enabled' : 'disabled', 'for tab:', tabId);
+                }
+                
+                if (executeDropdownArrow) {
+                    executeDropdownArrow.disabled = !isEnabled;
+                    console.log('Execute dropdown arrow', isEnabled ? 'enabled' : 'disabled', 'for tab:', tabId);
+                }
+                
+                if (!executeBtn) {
                     console.log('updateExecuteButton - no execute button found for tab:', tabId);
                 }
             } else {
@@ -1359,6 +1493,7 @@ const Interface = {
             const option = document.createElement('option');
             option.value = item.dataset.uid;
             option.textContent = item.dataset.name || item.querySelector('div[style*="font-weight: 500"]')?.textContent || 'Unknown';
+            option.dataset.type = item.dataset.type; // Add the data-type attribute
             
             // Select current datasource if it matches (use selectedDatasourceUid as the default)
             if (item.dataset.uid === GrafanaConfig.currentDatasourceId || 
@@ -1395,6 +1530,7 @@ const Interface = {
                 const option = document.createElement('option');
                 option.value = ds.uid;
                 option.textContent = ds.name;
+                option.dataset.type = ds.type; // Add the data-type attribute
                 
                 if (ds.uid === GrafanaConfig.currentDatasourceId) {
                     option.selected = true;
@@ -1473,19 +1609,6 @@ const Interface = {
         }
     },
 
-    loadAnalytics() {
-        console.log('Interface.loadAnalytics called');
-        if (typeof Analytics !== 'undefined') {
-            Analytics.initialize();
-        } else {
-            console.error('Analytics module not available');
-        }
-        
-        // Load AI connections when analytics panel is opened
-        if (typeof loadAiConnections === 'function') {
-            loadAiConnections();
-        }
-    },
 
     // Initialize resizers for sidebar and panel
     initializeResizers() {
@@ -1650,6 +1773,214 @@ const Interface = {
             console.error('Connection attempt failed:', error);
             return false;
         }
+    },
+
+    // Execute query with AI analysis
+    async executeWithAnalysis(tabId, analysisType) {
+        console.log('executeWithAnalysis called with tabId:', tabId, 'analysisType:', analysisType);
+        
+        // First execute the regular query
+        await this.executeQuery(tabId);
+        
+        // Check if we have results to analyze
+        if (!GrafanaConfig.currentResults || !GrafanaConfig.currentResults.results || !GrafanaConfig.currentResults.results.A) {
+            this.showToast('No query results to analyze. Please execute a successful query first.', 'error');
+            return;
+        }
+
+        // Check if AI is connected
+        if (!window.Analytics || !Analytics.isConnected) {
+            this.showToast('AI service not connected. Please connect to an AI service first.', 'error');
+            return;
+        }
+
+        try {
+            this.showToast(`Running ${analysisType} analysis...`, 'info');
+            
+            // Show and switch to AI Analysis panel
+            this.showAIAnalysisTab();
+            this.switchPanel('ai-analysis');
+            
+            // Show loading in AI Analysis panel
+            const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+            if (aiAnalysisContent) {
+                aiAnalysisContent.innerHTML = '<div class="analysis-loading">Running AI analysis... This may take a few moments.</div>';
+            }
+            
+            // Get the current query results
+            const results = GrafanaConfig.currentResults;
+            const tabData = this.tabs.get(tabId || this.activeTab);
+            const query = tabData && tabData.editor ? tabData.editor.getValue() : '';
+            
+            // Run the AI analysis
+            let analysisResult;
+            switch (analysisType) {
+                case 'anomaly':
+                    analysisResult = await this.runAnomalyDetection(results, query);
+                    break;
+                case 'prediction':
+                    analysisResult = await this.runPrediction(results, query);
+                    break;
+                case 'trend':
+                    analysisResult = await this.runTrendAnalysis(results, query);
+                    break;
+                default:
+                    throw new Error('Unknown analysis type: ' + analysisType);
+            }
+            
+            // Display results in AI Analysis panel
+            this.displayAIAnalysisResults(analysisResult, analysisType);
+            this.showToast(`${analysisType} analysis completed`, 'success');
+            
+        } catch (error) {
+            console.error('AI analysis failed:', error);
+            this.showToast('AI analysis failed: ' + error.message, 'error');
+            
+            // Show error in AI Analysis panel
+            const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+            if (aiAnalysisContent) {
+                aiAnalysisContent.innerHTML = `<div class="analysis-error">Analysis failed: ${error.message}</div>`;
+            }
+        }
+    },
+
+    // Show AI Analysis tab
+    showAIAnalysisTab() {
+        const aiAnalysisTab = document.querySelector('[data-panel="ai-analysis"]');
+        if (aiAnalysisTab) {
+            aiAnalysisTab.style.display = 'block';
+        }
+    },
+
+    // Run anomaly detection analysis
+    async runAnomalyDetection(results, query) {
+        // Use AIAnalytics.executeAnalysis which is the correct method
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'anomaly',
+                sensitivity: 'medium',
+                alertThreshold: 0.8,
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Run prediction analysis
+    async runPrediction(results, query) {
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            // Configure Analytics for the analysis
+            if (typeof Analytics !== 'undefined') {
+                Analytics.config.analysisType = 'prediction';
+                Analytics.config.forecastHorizon = '1d';
+                Analytics.config.confidenceLevel = 0.95;
+                Analytics.config.timeRange = timeRange;
+            }
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'prediction',
+                forecastHorizon: '1d',
+                confidenceLevel: 0.95,
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Run trend analysis
+    async runTrendAnalysis(results, query) {
+        if (typeof AIAnalytics !== 'undefined' && AIAnalytics.executeAnalysis) {
+            // Get time range from the query controls
+            const timeFromHours = parseFloat(document.getElementById('timeFrom')?.value) || 1;
+            const timeRange = timeFromHours <= 1 ? '1h' : timeFromHours <= 24 ? `${Math.round(timeFromHours)}h` : `${Math.round(timeFromHours/24)}d`;
+            
+            // Configure Analytics for the analysis
+            if (typeof Analytics !== 'undefined') {
+                Analytics.config.analysisType = 'trend';
+                Analytics.config.trendDepth = 'seasonal';
+                Analytics.config.timeRange = timeRange;
+            }
+            
+            return await AIAnalytics.executeAnalysis({
+                analysisType: 'trend',
+                trendDepth: 'seasonal',
+                timeRange: timeRange,
+                existingResults: results,
+                query: query
+            });
+        } else {
+            throw new Error('AIAnalytics module not available');
+        }
+    },
+
+    // Display AI analysis results
+    displayAIAnalysisResults(analysisResult, analysisType) {
+        const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+        if (!aiAnalysisContent) return;
+
+        let html = `<div class="ai-analysis-results">`;
+        html += `<h3>${this.getAnalysisTitle(analysisType)}</h3>`;
+        
+        if (analysisResult.insights && analysisResult.insights.length > 0) {
+            html += '<div class="analysis-insights">';
+            html += '<h4>Key Insights:</h4>';
+            html += '<ul>';
+            analysisResult.insights.forEach(insight => {
+                html += `<li>${Utils.escapeHtml(insight)}</li>`;
+            });
+            html += '</ul></div>';
+        }
+
+        if (analysisResult.summary) {
+            html += `<div class="analysis-summary">`;
+            html += `<h4>Summary:</h4>`;
+            html += `<p>${Utils.escapeHtml(analysisResult.summary)}</p>`;
+            html += `</div>`;
+        }
+
+        if (analysisResult.recommendations && analysisResult.recommendations.length > 0) {
+            html += '<div class="analysis-recommendations">';
+            html += '<h4>Recommendations:</h4>';
+            html += '<ul>';
+            analysisResult.recommendations.forEach(rec => {
+                html += `<li>${Utils.escapeHtml(rec)}</li>`;
+            });
+            html += '</ul></div>';
+        }
+
+        // Show raw analysis data if available
+        html += '<details style="margin-top: 20px;"><summary style="cursor: pointer; color: #f46800;">View Raw Analysis Data</summary>';
+        html += '<pre style="background: #2d2d30; padding: 10px; border-radius: 4px; overflow: auto;">';
+        html += Utils.escapeHtml(JSON.stringify(analysisResult, null, 2));
+        html += '</pre></details>';
+
+        html += '</div>';
+        
+        aiAnalysisContent.innerHTML = html;
+    },
+
+    // Get analysis title
+    getAnalysisTitle(analysisType) {
+        switch (analysisType) {
+            case 'anomaly': return 'Anomaly Detection Results';
+            case 'prediction': return 'Prediction Analysis Results';
+            case 'trend': return 'Trend Analysis Results';
+            default: return 'Analysis Results';
+        }
     }
 };
 
@@ -1805,7 +2136,17 @@ function showNewAiConnectionDialog() {
     document.getElementById('aiEndpointGroup').style.display = 'block';
     document.getElementById('aiApiKeyGroup').style.display = 'none';
     document.getElementById('advancedSettingsToggle').style.display = 'block';
-    document.getElementById('aiModel').value = 'llama3.1:8b-instruct-q4_K_M';
+    // Set default model options without connecting
+    const modelSelect = document.getElementById('aiModel');
+    modelSelect.innerHTML = `
+        <option value="llama3.1:8b-instruct-q4_K_M">llama3.1:8b-instruct-q4_K_M (Default)</option>
+        <option value="llama3:8b">llama3:8b</option>
+        <option value="llama3:70b">llama3:70b</option>
+        <option value="mistral">mistral</option>
+        <option value="codellama">codellama</option>
+        <option value="custom">Custom Model</option>
+    `;
+    modelSelect.value = 'llama3.1:8b-instruct-q4_K_M';
     document.getElementById('customModelName').value = '';
     document.getElementById('aiResponseTokens').value = '-1';
     document.getElementById('aiContextSize').value = '16384';
@@ -1816,8 +2157,9 @@ function showNewAiConnectionDialog() {
     // Clear any editing state
     window.editingAiConnectionId = null;
     
-    // Load available models for default provider
-    loadAvailableModels();
+    // Load available models for default provider (only if not erroring)
+    // Don't auto-load models to avoid connection errors
+    // User can click refresh or change provider to load models
     
     document.getElementById('aiConnectionDialog').style.display = 'flex';
 }
@@ -2118,11 +2460,46 @@ function loadAiConnections() {
         return;
     }
     
-    // Clean up connection states - only active connection should be marked as connected
+    // Clean up connection states - check actual AI service status
     let hasChanges = false;
+    // Check if any AI service is actually connected
+    const isAnalyticsConnected = window.Analytics && Analytics.isConnected;
+    const isOllamaConnected = window.OllamaService && window.OllamaService.isConnected;
+    const isOpenAIConnected = window.OpenAIService && window.OpenAIService.isConnected;
+    const isAiActuallyConnected = isAnalyticsConnected || isOllamaConnected || isOpenAIConnected;
+    
+    console.log('🔍 AI Service Status Check:', {
+        analytics: isAnalyticsConnected,
+        ollama: isOllamaConnected,
+        openai: isOpenAIConnected,
+        anyConnected: isAiActuallyConnected
+    });
+    
     aiConnections = aiConnections.map(conn => {
-        if (conn.status === 'connected' && conn.id !== activeConnectionId) {
-            console.log(`🔧 UI: Cleaning up stale connected status for ${conn.name}`);
+        // If this is the active connection, check if AI is actually connected
+        if (conn.id === activeConnectionId) {
+            // Only update status if there's a significant state change
+            // Don't immediately disconnect after connection
+            if (conn.status === 'connected' && !isAiActuallyConnected) {
+                // Only mark as disconnected if we're sure the service is down
+                // Add a delay to prevent immediate disconnection after connection
+                const shouldDisconnect = !isAiActuallyConnected;
+                if (shouldDisconnect) {
+                    console.log(`🔧 UI: AI service disconnected, updating status for ${conn.name}`);
+                    hasChanges = true;
+                    return { ...conn, status: 'disconnected' };
+                }
+            } else if (conn.status === 'disconnected' && isAiActuallyConnected) {
+                console.log(`🔧 UI: AI service connected, updating status for ${conn.name}`);
+                hasChanges = true;
+                return { ...conn, status: 'connected' };
+            }
+            return conn;
+        }
+        
+        // For non-active connections, ensure they're marked as disconnected
+        if (conn.status === 'connected') {
+            console.log(`🔧 UI: Cleaning up stale connected status for ${conn.name} (not active)`);
             hasChanges = true;
             return { ...conn, status: 'disconnected' };
         }
@@ -2286,6 +2663,10 @@ async function connectToAiService(connectionId) {
             } else {
                 OllamaService.disconnect();
             }
+            // Update Analytics connection state when disconnecting
+            if (window.Analytics) {
+                Analytics.isConnected = false;
+            }
             return { ...conn, status: 'disconnected' };
         }
         return conn;
@@ -2299,30 +2680,89 @@ async function connectToAiService(connectionId) {
     
     try {
         // Initialize the appropriate service based on provider
+        let initSuccess = false;
         if (connection.provider === 'openai') {
-            await OpenAIService.initialize(connection.apiKey, connection.model);
+            initSuccess = await OpenAIService.initialize(connection.apiKey, connection.model);
+            console.log('🔍 OpenAI init result:', initSuccess, 'isConnected:', OpenAIService.isConnected);
         } else {
             // Default to Ollama for backwards compatibility
-            await OllamaService.initialize(connection.endpoint, connection.model);
+            initSuccess = await OllamaService.initialize(connection.endpoint, connection.model);
+            console.log('🔍 Ollama init result:', initSuccess, 'isConnected:', OllamaService.isConnected);
+            
+            // CRITICAL FIX: If OllamaService.initialize returned true but isConnected is still false,
+            // there's a bug in the initialization. Force the correct state.
+            if (initSuccess && !OllamaService.isConnected) {
+                console.warn('⚠️ BUG: OllamaService.initialize returned true but isConnected is false. Fixing...');
+                OllamaService.isConnected = true;
+            }
         }
+        
+        if (!initSuccess) {
+            throw new Error('Service initialization returned false');
+        }
+        
         connection.status = 'connected';
         // Set this as the active AI connection
         Storage.set('ACTIVE_AI_CONNECTION', connectionId);
         console.log(`✅ Successfully connected to ${connection.name}`);
+        
+        // Update storage first
+        aiConnections[connectionIndex] = connection;
+        Storage.setAiConnections(aiConnections);
+        
+        // Force UI refresh with a small delay to ensure state is fully updated
+        setTimeout(async () => {
+            loadAiConnections();
+            // Sync Analytics with the connected service
+            if (window.Analytics) {
+                // Since OllamaService/OpenAIService.initialize was already called above,
+                // just sync the Analytics state
+                window.Analytics.isConnected = true;
+                window.Analytics.config.provider = connection.provider || 'ollama';
+                window.Analytics.config.activeConnectionName = connection.name;
+                window.Analytics.config.activeConnectionId = connection.id;
+                
+                if (connection.provider === 'openai') {
+                    window.Analytics.config.openaiApiKey = connection.apiKey;
+                    window.Analytics.config.selectedModel = connection.model;
+                    console.log('✅ Analytics synced with OpenAI connection');
+                } else {
+                    window.Analytics.config.ollamaEndpoint = connection.endpoint;
+                    window.Analytics.config.selectedModel = connection.model;
+                    console.log('✅ Analytics synced with Ollama connection');
+                }
+                
+                // Update UI elements
+                if (typeof window.Analytics.updateTitleBarStatus === 'function') {
+                    window.Analytics.updateTitleBarStatus();
+                }
+                if (typeof window.Analytics.updateAnalysisButton === 'function') {
+                    window.Analytics.updateAnalysisButton();
+                }
+            }
+            
+            // Trigger advanced AI initialization if available
+            if (window.initializeAdvancedAIWhenReady) {
+                setTimeout(() => {
+                    window.initializeAdvancedAIWhenReady();
+                }, 1000);
+            }
+        }, 100);
+        
     } catch (error) {
         connection.status = 'disconnected';
         console.error('AI connection failed:', error);
         alert(`Failed to connect to ${connection.name}: ${error.message}`);
-    }
-    
-    // Update storage and UI
-    aiConnections[connectionIndex] = connection;
-    Storage.setAiConnections(aiConnections);
-    loadAiConnections();
-    
-    // Update title bar status
-    if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
-        window.Analytics.updateTitleBarStatus();
+        
+        // Update storage and UI for failure case
+        aiConnections[connectionIndex] = connection;
+        Storage.setAiConnections(aiConnections);
+        loadAiConnections();
+        
+        // Update title bar status after failure
+        if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
+            window.Analytics.updateTitleBarStatus();
+        }
     }
 }
 
@@ -2559,5 +2999,26 @@ async function connectToConnectionWithSpinner(connectionId) {
         }
         
         Interface.showToast(errorMessage, 'error');
+    }
+}
+
+// Global functions for execute dropdown functionality
+function toggleExecuteDropdown(tabId) {
+    const dropdown = document.getElementById(`executeDropdown-${tabId}`);
+    if (dropdown) {
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+        
+        // Close dropdown when clicking outside
+        if (!isVisible) {
+            setTimeout(() => {
+                document.addEventListener('click', function closeDropdown(e) {
+                    if (!e.target.closest('.execute-dropdown-container')) {
+                        dropdown.style.display = 'none';
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                });
+            }, 0);
+        }
     }
 }

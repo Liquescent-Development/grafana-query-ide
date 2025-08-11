@@ -1,5 +1,7 @@
 // AI Analytics Controller
 // Main controller for AI/ML analytics functionality
+// WARNING: This module is being refactored to use DataAccess
+// Use DataAccess for new code - see dataAccess.js
 
 const Analytics = {
     // State management
@@ -14,6 +16,7 @@ const Analytics = {
         retentionPolicy: 'raw',
         measurement: '',
         field: '',
+        aggregation: 'sum', // Default aggregation function
         tags: {},
         tagFilters: [], // Array of {tagKey: '', tagValue: ''} objects
         groupByTime: false,
@@ -36,10 +39,21 @@ const Analytics = {
     // Initialize the analytics system
     initialize() {
         console.log('🤖 Initializing Analytics system...');
+        // Only reset connection state if we're not already connected
+        // This prevents losing connection state when switching views
+        if (!this.isConnected) {
+            // Check if services are already connected
+            if (window.OllamaService?.isConnected || window.OpenAIService?.isConnected) {
+                console.log('🔍 Found existing service connection during Analytics init');
+                this.isConnected = true;
+            } else {
+                this.isConnected = false;
+            }
+        }
         this.setupEventListeners();
         this.loadConfiguration();
         this.updateUI();
-        console.log('✅ Analytics system initialized');
+        console.log('✅ Analytics system initialized, isConnected:', this.isConnected);
     },
 
     // Setup all event listeners
@@ -165,6 +179,14 @@ const Analytics = {
             });
         }
 
+        const aggregation = document.getElementById('analyticsAggregation');
+        if (aggregation) {
+            aggregation.addEventListener('change', (e) => {
+                this.config.aggregation = e.target.value;
+                this.saveConfiguration();
+            });
+        }
+
         const timeRange = document.getElementById('analyticsTimeRange');
         if (timeRange) {
             timeRange.addEventListener('change', (e) => {
@@ -271,7 +293,13 @@ const Analytics = {
     // Fetch available models from Ollama
     async fetchAvailableModels() {
         try {
-            const response = await fetch(`${this.config.ollamaEndpoint}/api/tags`);
+            // Use the actual endpoint from OllamaService if it's connected
+            let endpoint = this.config.ollamaEndpoint;
+            if (window.OllamaService?.isConnected && window.OllamaService?.config?.endpoint) {
+                endpoint = window.OllamaService.config.endpoint;
+            }
+            
+            const response = await fetch(`${endpoint}/api/tags`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -286,7 +314,13 @@ const Analytics = {
     // Get model capabilities
     async getModelCapabilities(modelName) {
         try {
-            const response = await fetch(`${this.config.ollamaEndpoint}/api/show`, {
+            // Use the actual endpoint from OllamaService if it's connected
+            let endpoint = this.config.ollamaEndpoint;
+            if (window.OllamaService?.isConnected && window.OllamaService?.config?.endpoint) {
+                endpoint = window.OllamaService.config.endpoint;
+            }
+            
+            const response = await fetch(`${endpoint}/api/show`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model: modelName })
@@ -413,10 +447,9 @@ const Analytics = {
             this.loadTagsForField(this.config.measurement, this.config.field);
         }
         
-        // Check for existing AI connections
-        this.checkAiConnection().catch(error => {
-            console.warn('Failed to check AI connections:', error);
-        });
+        // Don't automatically check for AI connections on startup
+        // AI connections should only happen when user explicitly connects
+        console.log('💡 AI connections ready - user can connect via AI Connections panel');
         
         // Force load AI connections UI
         setTimeout(() => {
@@ -479,6 +512,7 @@ const Analytics = {
 
     // Initialize AI connection and appropriate service (Ollama or OpenAI)
     async initializeAiConnection(connection) {
+        console.log('🔍 Analytics.initializeAiConnection called with:', connection);
         try {
             // Update all relevant config with connection info
             this.config.selectedModel = connection.model;
@@ -486,23 +520,61 @@ const Analytics = {
             this.config.activeConnectionName = connection.name;
             this.config.activeConnectionId = connection.id;
             
-            // Initialize the appropriate service
+            // Check current service state before initialization
             if (connection.provider === 'openai') {
-                this.config.openaiApiKey = connection.apiKey;
-                await OpenAIService.initialize(connection.apiKey, connection.model);
+                console.log('🔍 OpenAI state before init:', {
+                    exists: typeof OpenAIService !== 'undefined',
+                    isConnected: window.OpenAIService?.isConnected
+                });
             } else {
-                this.config.ollamaEndpoint = connection.endpoint;
-                await OllamaService.initialize(connection.endpoint, connection.model);
+                console.log('🔍 Ollama state before init:', {
+                    exists: typeof OllamaService !== 'undefined', 
+                    isConnected: window.OllamaService?.isConnected
+                });
             }
             
-            this.isConnected = true;
-            console.log('✅ AI service initialized:', connection.name, connection.provider === 'openai' ? '(OpenAI)' : `at ${connection.endpoint}`);
+            // Initialize the appropriate service and check result
+            let initResult = false;
+            if (connection.provider === 'openai') {
+                this.config.openaiApiKey = connection.apiKey;
+                // Check if already connected before re-initializing
+                if (window.OpenAIService?.isConnected) {
+                    console.log('🔍 OpenAI already connected, skipping re-initialization');
+                    initResult = true;
+                } else {
+                    initResult = await OpenAIService.initialize(connection.apiKey, connection.model);
+                    console.log('🔍 OpenAI init result in Analytics:', initResult, 'isConnected now:', window.OpenAIService?.isConnected);
+                }
+            } else {
+                this.config.ollamaEndpoint = connection.endpoint;
+                // Check if already connected before re-initializing
+                if (window.OllamaService?.isConnected) {
+                    console.log('🔍 Ollama already connected, skipping re-initialization');
+                    initResult = true;
+                } else {
+                    initResult = await OllamaService.initialize(connection.endpoint, connection.model);
+                    console.log('🔍 Ollama init result in Analytics:', initResult, 'isConnected now:', window.OllamaService?.isConnected);
+                }
+            }
+            
+            // Only set connected if initialization actually succeeded
+            if (initResult === true) {
+                this.isConnected = true;
+                console.log('✅ AI service initialized:', connection.name, connection.provider === 'openai' ? '(OpenAI)' : `at ${connection.endpoint}`);
+            } else {
+                this.isConnected = false;
+                console.warn('⚠️ AI service initialization returned false for:', connection.name);
+            }
+            
             this.updateTitleBarStatus();
             this.updateAnalysisButton();
-            return true;
+            return initResult;
             
         } catch (error) {
             console.warn('⚠️ Failed to initialize AI connection:', connection.name, error.message);
+            
+            // Ensure Analytics is marked as disconnected
+            this.isConnected = false;
             
             // Update connection status to disconnected since it failed
             const aiConnections = Storage.getAiConnections();
@@ -519,7 +591,6 @@ const Analytics = {
                 }, 100);
             }
             
-            this.isConnected = false;
             this.updateTitleBarStatus();
             this.updateAnalysisButton();
             return false;
@@ -617,13 +688,28 @@ const Analytics = {
     updateTitleBarStatus() {
         const titleBarStatus = document.getElementById('titleBarAiStatus');
         if (titleBarStatus) {
-            if (this.isConnected) {
+            // Check for any AI service connection (not just Analytics)
+            const isAnalyticsConnected = this.isConnected;
+            const isOllamaConnected = window.OllamaService && window.OllamaService.isConnected;
+            const isOpenAIConnected = window.OpenAIService && window.OpenAIService.isConnected;
+            const isAnyAIConnected = isAnalyticsConnected || isOllamaConnected || isOpenAIConnected;
+            
+            console.log('🔄 Updating AI title bar status:', {
+                isAnalyticsConnected,
+                isOllamaConnected,
+                isOpenAIConnected,
+                isAnyAIConnected
+            });
+            
+            if (isAnyAIConnected) {
                 titleBarStatus.className = 'connection-status ai-connected';
                 titleBarStatus.textContent = 'AI: Connected';
             } else {
                 titleBarStatus.className = 'connection-status ai-disconnected';
                 titleBarStatus.textContent = 'AI: Not Connected';
             }
+        } else {
+            console.warn('⚠️ AI title bar status element not found');
         }
     },
 
@@ -1152,6 +1238,7 @@ const Analytics = {
                 retentionPolicy: this.config.retentionPolicy,
                 measurement: this.config.measurement,
                 field: this.config.field,
+                aggregation: this.config.aggregation,
                 timeRange: this.config.timeRange,
                 tags: tags,
                 sensitivity: this.config.sensitivity,
@@ -1545,19 +1632,128 @@ const Analytics = {
         this.closeSavedAnalysisLoading();
         
         // Render results with proper loading handling
-        if (typeof AnalyticsVisualizer !== 'undefined') {
-            // Use setTimeout to allow UI to update and show the loading state
-            setTimeout(() => {
-                try {
-                    AnalyticsVisualizer.visualizeResults(results, 'analyticsModalResults');
-                } catch (error) {
-                    console.error('Error rendering charts:', error);
-                    this.showRawResultsInModal(results);
-                }
-            }, 100);
-        } else {
-            this.showRawResultsInModal(results);
+        // Execute a query to get the raw data for charting
+        this.executeQueryForChart(results).then(() => {
+            // Chart initialization is handled in executeQueryForChart
+        }).catch(error => {
+            console.error('Error creating chart:', error);
+            // Fall back to the custom visualizer if available
+            if (typeof AnalyticsVisualizer !== 'undefined') {
+                setTimeout(() => {
+                    try {
+                        AnalyticsVisualizer.visualizeResults(results, 'analyticsModalResults');
+                    } catch (error) {
+                        console.error('Error rendering charts:', error);
+                        this.showRawResultsInModal(results);
+                    }
+                }, 100);
+            } else {
+                this.showRawResultsInModal(results);
+            }
+        });
+    },
+
+    // Execute query to get chart data
+    async executeQueryForChart(aiResults) {
+        console.log('📊 Executing query for chart visualization');
+        
+        // Build the query with user's aggregation
+        const aggregation = this.config.aggregation || 'sum';
+        const measurement = this.config.retentionPolicy ? 
+            `"${this.config.retentionPolicy}"."${this.config.measurement}"` : 
+            `"${this.config.measurement}"`;
+        
+        let whereClause = `time >= now() - ${this.config.timeRange}`;
+        
+        // Add tag filters
+        if (this.config.tags && Object.keys(this.config.tags).length > 0) {
+            const tagFilters = Object.entries(this.config.tags)
+                .map(([key, value]) => `"${key}" = '${value}'`)
+                .join(' AND ');
+            whereClause += ` AND ${tagFilters}`;
         }
+        
+        // Calculate appropriate time interval for grouping
+        const interval = this.calculateTimeInterval(this.config.timeRange);
+        
+        const query = `SELECT ${aggregation}("${this.config.field}") as value 
+                      FROM ${measurement} 
+                      WHERE ${whereClause}
+                      GROUP BY time(${interval}) fill(none)`;
+        
+        console.log('📝 Chart query:', query);
+        
+        // Execute the query
+        const queryResult = await Queries.executeQuery(query, {
+            datasourceId: GrafanaConfig.currentDatasourceId,
+            datasourceType: GrafanaConfig.selectedDatasourceType
+        });
+        
+        if (!queryResult || !queryResult.results || !queryResult.results.A) {
+            throw new Error('No data returned from query');
+        }
+        
+        // Update the modal content with chart HTML
+        const modalResults = document.getElementById('analyticsModalResults');
+        if (modalResults) {
+            // Create the chart HTML structure that Charts.js expects
+            modalResults.innerHTML = `
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h4>Time Series Data</h4>
+                        <div class="chart-controls">
+                            <div class="chart-option">
+                                <input type="checkbox" id="showAllSeries" checked>
+                                <label for="showAllSeries">Show All Groups</label>
+                            </div>
+                            <div class="chart-option">
+                                <label for="chartType">Chart Type:</label>
+                                <select id="chartType">
+                                    <option value="line" selected>Line</option>
+                                    <option value="bar">Bar</option>
+                                    <option value="scatter">Scatter</option>
+                                </select>
+                            </div>
+                            <div class="chart-option">
+                                <input type="checkbox" id="smoothLines" checked>
+                                <label for="smoothLines">Smooth Lines</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="timeSeriesChart"></canvas>
+                    </div>
+                </div>
+                <div class="ai-analysis-section">
+                    <h4>AI Analysis Results</h4>
+                    <div id="aiAnalysisContent"></div>
+                </div>
+            `;
+            
+            // Initialize the chart using the existing Charts code
+            if (typeof Charts !== 'undefined') {
+                Charts.initializeChart(queryResult.results.A.frames || []);
+            }
+            
+            // Add the AI analysis results below the chart
+            const aiContent = document.getElementById('aiAnalysisContent');
+            if (aiContent && typeof AnalyticsVisualizer !== 'undefined') {
+                AnalyticsVisualizer.visualizeResults(aiResults, 'aiAnalysisContent');
+            }
+        }
+    },
+    
+    // Calculate appropriate time interval based on time range
+    calculateTimeInterval(timeRange) {
+        const intervals = {
+            '1h': '1m',
+            '6h': '1m',
+            '1d': '1m',
+            '7d': '1m',
+            '30d': '1m',  // Use 1m like Grafana does
+            '90d': '5m'
+        };
+        return intervals[timeRange] || '1m';
     },
 
     // Close results modal
@@ -2109,16 +2305,19 @@ const Analytics = {
                 measurement: this.config.measurement
             });
             
-            // Use the proper query system
-            if (typeof Queries !== 'undefined' && Queries.executeQueryDirect) {
-                console.log('🏷️ Executing query via Queries.executeQueryDirect...');
-                const result = await Queries.executeQueryDirect(query, {
-                    datasourceId: GrafanaConfig.currentDatasourceId,
-                    datasourceType: GrafanaConfig.selectedDatasourceType,
-                    timeout: 5000
-                });
-                
-                console.log('🏷️ Tag values query result:', result);
+            // Use DataAccess for tag values query
+            console.log('🏷️ Executing query via DataAccess...');
+            const result = await DataAccess.executeQuery(
+                GrafanaConfig.currentDatasourceId,
+                query,
+                {
+                    datasourceType: GrafanaConfig.selectedDatasourceType || 'influxdb',
+                    maxDataPoints: 1000,
+                    raw: true
+                }
+            );
+            
+            console.log('🏷️ Tag values query result:', result);
                 console.log('🏷️ Result structure check:', {
                     hasResult: !!result,
                     hasResults: !!(result && result.results),
@@ -2178,14 +2377,6 @@ const Analytics = {
                     console.log('🏷️ Full result structure:', JSON.stringify(result, null, 2));
                     targetSelect.innerHTML = '<option value="">No values found</option>';
                 }
-            } else {
-                console.error('❌ Queries module not available:', { 
-                    typeofQueries: typeof Queries, 
-                    hasExecuteQueryDirect: !!(window.Queries && window.Queries.executeQueryDirect),
-                    windowQueries: !!window.Queries
-                });
-                targetSelect.innerHTML = '<option value="">Query system unavailable</option>';
-            }
         } catch (error) {
             console.error('❌ Failed to load tag values for', tagKey, ':', error);
             console.error('❌ Error details:', {

@@ -34,12 +34,24 @@ const OpenAIService = {
             this.isConnected = true;
             this.lastError = null;
             console.log('✅ OpenAI service initialized successfully');
+            
+            // Update title bar status when connected
+            if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
+                window.Analytics.updateTitleBarStatus();
+            }
+            
             return true;
             
         } catch (error) {
             this.isConnected = false;
             this.lastError = error.message;
             console.error('❌ OpenAI initialization failed:', error);
+            
+            // Update title bar status when disconnected
+            if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
+                window.Analytics.updateTitleBarStatus();
+            }
+            
             throw error;
         }
     },
@@ -283,9 +295,17 @@ const OpenAIService = {
             console.error('Failed to parse JSON response:', error);
             console.log('Raw response:', response);
             
+            // Check if response contains markdown code blocks (unlikely for OpenAI but possible)
+            const markdownJsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (markdownJsonMatch) {
+                console.log('📋 Found JSON in markdown code block');
+                return JSON.parse(markdownJsonMatch[1]);
+            }
+            
             // Try to extract JSON from response
             const jsonMatch = response.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
+                console.log('📋 Found JSON object in response');
                 return JSON.parse(jsonMatch[0]);
             }
             
@@ -309,6 +329,11 @@ const OpenAIService = {
         this.config.apiKey = null; // Clear API key for security
         this.lastError = null;
         console.log('🔌 OpenAI service disconnected');
+        
+        // Update title bar status when disconnected
+        if (window.Analytics && typeof window.Analytics.updateTitleBarStatus === 'function') {
+            window.Analytics.updateTitleBarStatus();
+        }
     },
 
     // Create AbortController with compatibility check

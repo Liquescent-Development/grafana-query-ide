@@ -175,76 +175,10 @@ const History = {
         
         console.log('Found history item:', item);
         
-        // Helper function for escaping HTML
-        const escapeHtml = (text) => {
-            if (!text) return '';
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, (m) => map[m]);
-        };
-        
-        const formHtml = `
-            <div class="history-edit-overlay" id="historyEditOverlay">
-                <div class="history-edit-form">
-                    <h3>Edit Query Details</h3>
-                    <form onsubmit="History.saveItemEdits(event, ${id})">
-                        <div class="form-group">
-                            <label for="historyLabel">Label</label>
-                            <input type="text" id="historyLabel" value="${escapeHtml(item.label || '')}" 
-                                   placeholder="Enter a descriptive label">
-                        </div>
-                        <div class="form-group">
-                            <label for="historyTags">Tags (comma-separated)</label>
-                            <input type="text" id="historyTags" value="${escapeHtml((item.tags || []).join(', '))}" 
-                                   placeholder="tag1, tag2, tag3">
-                        </div>
-                        <div class="form-buttons">
-                            <button type="submit">Save</button>
-                            <button type="button" class="secondary-button" onclick="History.closeEditForm()">Cancel</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        `;
-        
-        console.log('Adding form HTML to body');
-        document.body.insertAdjacentHTML('beforeend', formHtml);
-        
-        // Add escape key handler
-        const overlay = document.getElementById('historyEditOverlay');
-        if (overlay) {
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    this.closeEditForm();
-                }
-            });
-        }
-    },
-    
-    // Save item edits
-    saveItemEdits(event, id) {
-        event.preventDefault();
-        
-        const label = document.getElementById('historyLabel').value.trim();
-        const tagsInput = document.getElementById('historyTags').value.trim();
-        const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
-        
-        Storage.updateHistoryItem(id, { label, tags });
-        this.closeEditForm();
-        this.loadHistory();
-    },
-    
-    // Close edit form
-    closeEditForm() {
-        const overlay = document.getElementById('historyEditOverlay');
-        if (overlay) {
-            overlay.remove();
-        }
+        ListManager.showEditForm('Edit Query Details', item, (data) => {
+            Storage.updateHistoryItem(id, data);
+            this.loadHistory();
+        });
     },
 
     // Load a specific history item

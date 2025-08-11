@@ -1,5 +1,6 @@
 const GrafanaConfig = {
     // Connection state
+    connected: false,
     url: '',
     username: '',
     password: '',

@@ -81,6 +81,15 @@ const Connections = {
 
     // Ensure disconnected state
     ensureDisconnectedState() {
+        // Reset GrafanaConfig to disconnected state
+        GrafanaConfig.connected = false;
+        GrafanaConfig.url = '';
+        GrafanaConfig.username = '';
+        GrafanaConfig.password = '';
+        GrafanaConfig.authHeader = '';
+        GrafanaConfig.currentConnectionId = null;
+        GrafanaConfig.connectionId = null;
+        
         // Check if elements exist before accessing them (VS Code interface compatibility)
         const authInfo = document.getElementById('authInfo');
         if (authInfo) {
@@ -124,6 +133,13 @@ const Connections = {
         if (titleBarStatus) {
             titleBarStatus.textContent = 'Not Connected';
             titleBarStatus.className = 'connection-status disconnected';
+        }
+        
+        // Ensure AI title bar status is also disconnected
+        const titleBarAiStatus = document.getElementById('titleBarAiStatus');
+        if (titleBarAiStatus) {
+            titleBarAiStatus.textContent = 'AI: Not Connected';
+            titleBarAiStatus.className = 'connection-status ai-disconnected';
         }
         
         // Remove disconnect button from title bar

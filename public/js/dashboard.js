@@ -1,3 +1,5 @@
+// WARNING: This module is being refactored to use DataAccess
+// Use DataAccess for dashboard data access - see dataAccess.js
 const Dashboard = {
     // Dashboard state
     currentDashboards: [],
@@ -47,18 +49,9 @@ const Dashboard = {
             // Get all dashboards without a search query
             const searchUrl = `/api/search?type=dash-db`;
             
-            const response = await API.makeApiRequest(searchUrl, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+            const results = await DataAccess.request(searchUrl, {
+                method: 'GET'
             });
-            
-            if (!response.ok) {
-                throw new Error('Dashboard loading failed: ' + response.statusText);
-            }
-            
-            const results = await response.json();
             console.log('All dashboard results:', results.length);
             
             // Filter to ensure we only have dashboards
@@ -125,18 +118,9 @@ const Dashboard = {
             
             const searchUrl = `/api/search?q=${encodeURIComponent(query)}&type=dash-db`;
             
-            const response = await API.makeApiRequest(searchUrl, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+            const results = await DataAccess.request(searchUrl, {
+                method: 'GET'
             });
-            
-            if (!response.ok) {
-                throw new Error('Dashboard search failed: ' + response.statusText);
-            }
-            
-            const results = await response.json();
             console.log('Dashboard search results (server-side):', results);
             
             // Filter results client-side if Grafana API didn't filter properly
@@ -167,18 +151,9 @@ const Dashboard = {
         try {
             console.log('Fetching dashboard:', uid);
             
-            const response = await API.makeApiRequest(`/api/dashboards/uid/${uid}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+            const result = await DataAccess.request(`/api/dashboards/uid/${uid}`, {
+                method: 'GET'
             });
-            
-            if (!response.ok) {
-                throw new Error('Dashboard fetch failed: ' + response.statusText);
-            }
-            
-            const result = await response.json();
             console.log('Dashboard data:', result);
             
             return result.dashboard;
@@ -1287,49 +1262,26 @@ const Dashboard = {
         console.log('📤 Sending panel query request:', queryRequest);
         console.log('📤 Query request JSON:', JSON.stringify(queryRequest, null, 2));
         
-        const response = await API.makeApiRequest('/api/ds/query', {
+        const data = await DataAccess.request('/api/ds/query', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(queryRequest)
+            body: queryRequest
         });
         
-        console.log('📥 Raw API response:', response);
-        console.log('📥 Response headers:', [...response.headers.entries()]);
+        console.log('✅ DataAccess response data:', data);
         
-        // Parse response if it's ok
-        if (response.ok) {
-            const responseText = await response.text();
-            console.log('📥 Raw response text:', responseText);
-            
-            try {
-                const data = JSON.parse(responseText);
-                console.log('✅ Parsed response data:', data);
-                
-                // Additional debugging for empty results
-                if (data.results) {
-                    Object.entries(data.results).forEach(([key, result]) => {
-                        console.log(`📊 Result ${key} detailed:`, {
-                            status: result.status,
-                            frameCount: result.frames?.length,
-                            error: result.error,
-                            message: result.message
-                        });
-                    });
-                }
-                
-                return { data };
-            } catch (parseError) {
-                console.error('❌ Failed to parse JSON:', parseError);
-                console.error('❌ Response text was:', responseText);
-                throw new Error(`Failed to parse response: ${parseError.message}`);
-            }
-        } else {
-            const errorText = await response.text();
-            console.error('❌ API error response:', response.status, errorText);
-            throw new Error(`API request failed: ${response.status} ${errorText}`);
+        // Additional debugging for empty results
+        if (data.results) {
+            Object.entries(data.results).forEach(([key, result]) => {
+                console.log(`📊 Result ${key} detailed:`, {
+                    status: result.status,
+                    frameCount: result.frames?.length,
+                    error: result.error,
+                    message: result.message
+                });
+            });
         }
+        
+        return { data };
     },
     
     // Resolve datasource UID

@@ -145,3 +145,6 @@ influxql_spec.md
 
 # Dynamic port info (no longer used)
 .port-info.json
+
+# E2E test data directory
+.test-data/

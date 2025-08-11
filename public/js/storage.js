@@ -14,6 +14,7 @@ const Storage = {
         AI_CONNECTIONS: { key: 'aiConnections', ttl: null },
         ACTIVE_AI_CONNECTION: { key: 'activeAiConnection', ttl: null },
         SAVED_AI_ANALYSES: { key: 'savedAiAnalyses', ttl: 7 * 24 * 60 * 60 * 1000 }, // 7 days
+        AI_CONVERSATIONS: { key: 'aiConversations', ttl: null, maxItems: 100 },
         
         // UI state and preferences
         FILE_EXPLORER_LAST_DIR: { key: 'fileExplorerLastDirectory', ttl: null }
@@ -778,5 +779,365 @@ const Storage = {
         const currentObject = this.get(cacheKey, {});
         const { [key]: removed, ...remainingObject } = currentObject;
         return this.set(cacheKey, remainingObject);
+    },
+
+    // ===== AI CONVERSATION MANAGEMENT =====
+    
+    // Get all conversations
+    getAiConversations() {
+        return this.get('AI_CONVERSATIONS', []);
+    },
+
+    // Save conversation
+    saveAiConversation(conversation) {
+        const conversations = this.getAiConversations();
+        
+        // Find existing conversation
+        const existingIndex = conversations.findIndex(c => c.id === conversation.id);
+        
+        if (existingIndex !== -1) {
+            // Update existing conversation
+            conversations[existingIndex] = {
+                ...conversations[existingIndex],
+                ...conversation,
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            // Add new conversation with metadata
+            const newConversation = {
+                id: conversation.id || this.generateConversationId(),
+                title: conversation.title || this.generateConversationTitle(conversation.messages),
+                messages: conversation.messages || [],
+                tags: conversation.tags || [],
+                starred: conversation.starred || false,
+                createdAt: conversation.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                datasourceContext: conversation.datasourceContext || null,
+                messageCount: (conversation.messages || []).length,
+                lastMessagePreview: this.getLastMessagePreview(conversation.messages)
+            };
+            
+            // Add to beginning of array
+            conversations.unshift(newConversation);
+        }
+        
+        // Ensure we don't exceed maxItems
+        if (conversations.length > 100) {
+            conversations.splice(100);
+        }
+        
+        return this.set('AI_CONVERSATIONS', conversations);
+    },
+
+    // Update conversation metadata
+    updateAiConversation(conversationId, updates) {
+        const conversations = this.getAiConversations();
+        const conversationIndex = conversations.findIndex(c => c.id === conversationId);
+        
+        if (conversationIndex !== -1) {
+            conversations[conversationIndex] = {
+                ...conversations[conversationIndex],
+                ...updates,
+                updatedAt: new Date().toISOString()
+            };
+            
+            // Update computed fields
+            if (updates.messages) {
+                conversations[conversationIndex].messageCount = updates.messages.length;
+                conversations[conversationIndex].lastMessagePreview = this.getLastMessagePreview(updates.messages);
+            }
+            
+            // If title is being updated, make sure it's valid
+            if (updates.title && updates.title.trim()) {
+                conversations[conversationIndex].title = updates.title.trim();
+            }
+            
+            this.set('AI_CONVERSATIONS', conversations);
+            return conversations[conversationIndex];
+        }
+        
+        return null;
+    },
+
+    // Delete conversation
+    deleteAiConversation(conversationId) {
+        const conversations = this.getAiConversations();
+        const filteredConversations = conversations.filter(c => c.id !== conversationId);
+        return this.set('AI_CONVERSATIONS', filteredConversations);
+    },
+
+    // Get specific conversation
+    getAiConversation(conversationId) {
+        const conversations = this.getAiConversations();
+        return conversations.find(c => c.id === conversationId) || null;
+    },
+
+    // Star/unstar conversation
+    toggleConversationStar(conversationId) {
+        const conversation = this.getAiConversation(conversationId);
+        if (conversation) {
+            return this.updateAiConversation(conversationId, {
+                starred: !conversation.starred
+            });
+        }
+        return null;
+    },
+
+    // Add tags to conversation
+    addConversationTags(conversationId, tags) {
+        const conversation = this.getAiConversation(conversationId);
+        if (conversation) {
+            const existingTags = conversation.tags || [];
+            const newTags = Array.isArray(tags) ? tags : [tags];
+            const updatedTags = [...new Set([...existingTags, ...newTags])]; // Remove duplicates
+            
+            return this.updateAiConversation(conversationId, {
+                tags: updatedTags
+            });
+        }
+        return null;
+    },
+
+    // Remove tags from conversation
+    removeConversationTags(conversationId, tagsToRemove) {
+        const conversation = this.getAiConversation(conversationId);
+        if (conversation) {
+            const existingTags = conversation.tags || [];
+            const removeArray = Array.isArray(tagsToRemove) ? tagsToRemove : [tagsToRemove];
+            const updatedTags = existingTags.filter(tag => !removeArray.includes(tag));
+            
+            return this.updateAiConversation(conversationId, {
+                tags: updatedTags
+            });
+        }
+        return null;
+    },
+
+    // Search conversations
+    searchAiConversations(searchTerm, options = {}) {
+        const conversations = this.getAiConversations();
+        
+        if (!searchTerm || searchTerm.trim() === '') {
+            return this.filterAndSortConversations(conversations, options);
+        }
+        
+        const term = searchTerm.toLowerCase().trim();
+        
+        const matchingConversations = conversations.filter(conversation => {
+            // Search in title
+            if (conversation.title && conversation.title.toLowerCase().includes(term)) {
+                return true;
+            }
+            
+            // Search in tags
+            if (conversation.tags && conversation.tags.some(tag => 
+                tag.toLowerCase().includes(term)
+            )) {
+                return true;
+            }
+            
+            // Search in message content
+            if (conversation.messages && conversation.messages.some(msg => 
+                (msg.content && msg.content.toLowerCase().includes(term)) ||
+                (msg.text && msg.text.toLowerCase().includes(term))
+            )) {
+                return true;
+            }
+            
+            // Search in last message preview
+            if (conversation.lastMessagePreview && 
+                conversation.lastMessagePreview.toLowerCase().includes(term)) {
+                return true;
+            }
+            
+            return false;
+        });
+        
+        return this.filterAndSortConversations(matchingConversations, options);
+    },
+
+    // Filter and sort conversations
+    filterAndSortConversations(conversations, options = {}) {
+        let filtered = conversations;
+        
+        // Filter by starred
+        if (options.starred === true) {
+            filtered = filtered.filter(c => c.starred);
+        }
+        
+        // Filter by tags
+        if (options.tags && options.tags.length > 0) {
+            filtered = filtered.filter(c => 
+                c.tags && c.tags.some(tag => options.tags.includes(tag))
+            );
+        }
+        
+        // Sort
+        const sortBy = options.sortBy || 'updatedAt';
+        const sortOrder = options.sortOrder || 'desc';
+        
+        filtered.sort((a, b) => {
+            let valueA, valueB;
+            
+            switch (sortBy) {
+                case 'title':
+                    valueA = (a.title || '').toLowerCase();
+                    valueB = (b.title || '').toLowerCase();
+                    break;
+                case 'createdAt':
+                    valueA = a.createdAt;
+                    valueB = b.createdAt;
+                    break;
+                case 'messageCount':
+                    valueA = a.messageCount || 0;
+                    valueB = b.messageCount || 0;
+                    break;
+                case 'starred':
+                    valueA = a.starred ? 1 : 0;
+                    valueB = b.starred ? 1 : 0;
+                    break;
+                default: // updatedAt
+                    valueA = a.updatedAt || a.createdAt;
+                    valueB = b.updatedAt || b.createdAt;
+            }
+            
+            if (sortOrder === 'asc') {
+                return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
+            } else {
+                return valueA < valueB ? 1 : valueA > valueB ? -1 : 0;
+            }
+        });
+        
+        return filtered;
+    },
+
+    // Get all unique tags from conversations
+    getAllConversationTags() {
+        const conversations = this.getAiConversations();
+        const allTags = new Set();
+        
+        conversations.forEach(conversation => {
+            if (conversation.tags) {
+                conversation.tags.forEach(tag => allTags.add(tag));
+            }
+        });
+        
+        return Array.from(allTags).sort();
+    },
+
+    // Clear all conversations
+    clearAiConversations() {
+        return this.set('AI_CONVERSATIONS', []);
+    },
+
+    // Utility methods for conversation management
+    generateConversationId() {
+        return 'conv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    },
+
+    generateConversationTitle(messages) {
+        if (!messages || messages.length === 0) {
+            return 'New Conversation';
+        }
+        
+        // Find the first user message
+        const firstUserMessage = messages.find(msg => msg.role === 'user' || msg.type === 'user');
+        
+        if (firstUserMessage) {
+            const content = firstUserMessage.content || firstUserMessage.text || '';
+            const cleaned = content.trim().replace(/\s+/g, ' ');
+            
+            if (cleaned.length > 50) {
+                return cleaned.substring(0, 47) + '...';
+            }
+            
+            return cleaned || 'New Conversation';
+        }
+        
+        return 'New Conversation';
+    },
+
+    getLastMessagePreview(messages) {
+        if (!messages || messages.length === 0) {
+            return '';
+        }
+        
+        const lastMessage = messages[messages.length - 1];
+        const content = lastMessage.content || lastMessage.text || '';
+        const cleaned = content.trim().replace(/\s+/g, ' ');
+        
+        if (cleaned.length > 100) {
+            return cleaned.substring(0, 97) + '...';
+        }
+        
+        return cleaned;
+    },
+
+    // Export conversations for backup
+    exportAiConversations() {
+        const conversations = this.getAiConversations();
+        const tags = this.getAllConversationTags();
+        
+        return {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            conversationCount: conversations.length,
+            conversations: conversations,
+            tags: tags
+        };
+    },
+
+    // Import conversations from backup
+    importAiConversations(backupData, options = {}) {
+        try {
+            const backup = typeof backupData === 'string' ? JSON.parse(backupData) : backupData;
+            
+            if (!backup.conversations || !Array.isArray(backup.conversations)) {
+                throw new Error('Invalid backup format: missing conversations array');
+            }
+            
+            const existingConversations = this.getAiConversations();
+            let importedCount = 0;
+            let updatedCount = 0;
+            
+            backup.conversations.forEach(conversation => {
+                if (!conversation.id) {
+                    conversation.id = this.generateConversationId();
+                }
+                
+                const existingIndex = existingConversations.findIndex(c => c.id === conversation.id);
+                
+                if (existingIndex !== -1) {
+                    if (options.overwrite) {
+                        existingConversations[existingIndex] = conversation;
+                        updatedCount++;
+                    }
+                } else {
+                    existingConversations.unshift(conversation);
+                    importedCount++;
+                }
+            });
+            
+            // Ensure we don't exceed max items
+            if (existingConversations.length > 100) {
+                existingConversations.splice(100);
+            }
+            
+            this.set('AI_CONVERSATIONS', existingConversations);
+            
+            return {
+                success: true,
+                imported: importedCount,
+                updated: updatedCount,
+                total: backup.conversations.length
+            };
+            
+        } catch (error) {
+            console.error('Error importing AI conversations:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };

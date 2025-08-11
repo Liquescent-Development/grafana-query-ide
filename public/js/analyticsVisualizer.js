@@ -13,6 +13,7 @@ const AnalyticsVisualizer = {
             medium: '#FF9800',
             high: '#F44336',
             critical: '#9C27B0',
+            unknown: '#999999',
             background: 'rgba(76, 175, 80, 0.1)'
         },
         prediction: {
@@ -259,16 +260,61 @@ const AnalyticsVisualizer = {
         
         // Sample data for better visualization if too dense
         if (processedDataPoints.length > 500) {
-            sampleRate = 10;
-            const sampledDataPoints = processedDataPoints.filter((_, index) => index % sampleRate === 0);
-            const sampledTimeLabels = timeLabels.filter((_, index) => index % sampleRate === 0);
+            // Use intelligent sampling that preserves min/max values in each window
+            const targetPoints = 500;
+            const windowSize = Math.ceil(processedDataPoints.length / targetPoints);
+            sampleRate = windowSize;
+            
+            const sampledDataPoints = [];
+            const sampledTimeLabels = [];
+            
+            for (let i = 0; i < processedDataPoints.length; i += windowSize) {
+                const window = processedDataPoints.slice(i, Math.min(i + windowSize, processedDataPoints.length));
+                const windowLabels = timeLabels.slice(i, Math.min(i + windowSize, timeLabels.length));
+                
+                if (window.length === 0) continue;
+                
+                // Find min and max points in this window to preserve variation
+                let minPoint = window[0];
+                let maxPoint = window[0];
+                let minIdx = 0;
+                let maxIdx = 0;
+                
+                window.forEach((point, idx) => {
+                    if (point.y < minPoint.y) {
+                        minPoint = point;
+                        minIdx = idx;
+                    }
+                    if (point.y > maxPoint.y) {
+                        maxPoint = point;
+                        maxIdx = idx;
+                    }
+                });
+                
+                // Add min first if it comes before max, otherwise add max first
+                if (minIdx < maxIdx) {
+                    sampledDataPoints.push(minPoint);
+                    sampledTimeLabels.push(windowLabels[minIdx]);
+                    if (minPoint !== maxPoint) {
+                        sampledDataPoints.push(maxPoint);
+                        sampledTimeLabels.push(windowLabels[maxIdx]);
+                    }
+                } else {
+                    sampledDataPoints.push(maxPoint);
+                    sampledTimeLabels.push(windowLabels[maxIdx]);
+                    if (minPoint !== maxPoint) {
+                        sampledDataPoints.push(minPoint);
+                        sampledTimeLabels.push(windowLabels[minIdx]);
+                    }
+                }
+            }
             
             // Re-index the sampled data points
             processedDataPoints = sampledDataPoints.map((point, index) => ({
                 x: index,
                 y: point.y,
                 originalTimestamp: point.originalTimestamp,
-                originalIndex: index * sampleRate // Keep track of original index
+                originalIndex: point.originalIndex || index
             }));
             timeLabels = sampledTimeLabels;
             
@@ -302,27 +348,36 @@ const AnalyticsVisualizer = {
         console.log('📊 Last 3 labels:', timeLabels.slice(-3));
         
         // Prepare datasets
-        const allNormalPoints = processedDataPoints.filter(p => !this.isAnomalyPoint(p, anomalies));
+        // For the normal line, we want ALL points (not filtered by anomalies)
+        // The line should show the complete time series
+        const allNormalPoints = processedDataPoints; // Use all points for the line
         
-        console.log('📊 Sample normal data points:', allNormalPoints.slice(0, 3).map(p => ({ x: p.x, y: p.y })));
-        console.log('📊 Last normal data points:', allNormalPoints.slice(-3).map(p => ({ x: p.x, y: p.y })));
+        console.log('📊 Total points for normal line:', allNormalPoints.length);
+        console.log('📊 Sample normal data points:', allNormalPoints.slice(0, 5).map(p => ({ x: p.x, y: p.y })));
+        console.log('📊 Mid normal data points:', allNormalPoints.slice(Math.floor(allNormalPoints.length/2), Math.floor(allNormalPoints.length/2) + 5).map(p => ({ x: p.x, y: p.y })));
+        console.log('📊 Last normal data points:', allNormalPoints.slice(-5).map(p => ({ x: p.x, y: p.y })));
+        console.log('📊 Y-value range:', {
+            min: Math.min(...allNormalPoints.map(p => p.y)),
+            max: Math.max(...allNormalPoints.map(p => p.y)),
+            mean: allNormalPoints.reduce((sum, p) => sum + p.y, 0) / allNormalPoints.length
+        });
 
         const datasets = [{
-            label: 'Normal Data',
+            label: 'Time Series',
             data: allNormalPoints,
             borderColor: this.colors.anomaly.normal,
             backgroundColor: 'transparent', // No fill
             pointRadius: 0, // Hide individual points for large datasets
             pointHoverRadius: 3,
-            tension: 0.2, // Smooth the line
-            borderWidth: 2, // Thicker line for visibility
+            tension: 0.1, // Less smoothing to show actual variation
+            borderWidth: 1.5, // Thinner line to see variation better
             fill: false // Explicitly no fill
         }];
         
-        // Add anomaly points by severity
-        const severityLevels = ['low', 'medium', 'high', 'critical'];
+        // Add anomaly points by severity (including unknown)
+        const severityLevels = ['low', 'medium', 'high', 'critical', 'unknown'];
         severityLevels.forEach(severity => {
-            const severityAnomalies = anomalies.filter(a => a.severity === severity);
+            const severityAnomalies = anomalies.filter(a => (a.severity || 'unknown') === severity);
             if (severityAnomalies.length > 0) {
                 console.log(`📊 Adding ${severity} anomalies:`, severityAnomalies.length);
                 // Create a sparse array for anomalies that matches the label length
@@ -729,7 +784,9 @@ const AnalyticsVisualizer = {
         let html = '<div class="anomalies-grid">';
         
         anomalies.slice(0, 10).forEach(anomaly => {
-            const severityColor = this.colors.anomaly[anomaly.severity] || '#999999';
+            // Handle missing severity field gracefully
+            const severity = anomaly.severity || 'unknown';
+            const severityColor = this.colors.anomaly[severity] || '#999999';
             const timestamp = new Date(anomaly.timestamp).toLocaleString();
             
             html += `
@@ -737,15 +794,15 @@ const AnalyticsVisualizer = {
                     <div class="anomaly-header">
                         <span class="anomaly-time">${timestamp}</span>
                         <span class="anomaly-severity" style="color: ${severityColor}">
-                            ${anomaly.severity.toUpperCase()}
+                            ${severity.toUpperCase()}
                         </span>
                     </div>
                     <div class="anomaly-details">
                         <div class="anomaly-value">Value: <strong>${anomaly.value}</strong></div>
-                        <div class="anomaly-score">Score: <strong>${anomaly.score.toFixed(2)}</strong></div>
-                        <div class="anomaly-type">Type: <strong>${anomaly.type}</strong></div>
+                        <div class="anomaly-score">Score: <strong>${anomaly.score ? anomaly.score.toFixed(2) : 'N/A'}</strong></div>
+                        <div class="anomaly-type">Type: <strong>${anomaly.type || 'unknown'}</strong></div>
                     </div>
-                    <div class="anomaly-explanation">${anomaly.explanation}</div>
+                    <div class="anomaly-explanation">${anomaly.explanation || 'No explanation provided'}</div>
                 </div>
             `;
         });
@@ -1223,11 +1280,18 @@ const AnalyticsVisualizer = {
             
             if (dataSpanDays > 1) {
                 // Multi-day data: show "Jul 15 12:30" format
-                return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
-                       date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                // Use UTC methods to avoid timezone issues
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const month = months[date.getUTCMonth()];
+                const day = date.getUTCDate();
+                const hours = date.getUTCHours().toString().padStart(2, '0');
+                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                return `${month} ${day} ${hours}:${minutes}`;
             } else {
                 // Single day data: show just time
-                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const hours = date.getUTCHours().toString().padStart(2, '0');
+                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
             }
         });
         

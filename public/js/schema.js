@@ -1,3 +1,5 @@
+// WARNING: This module is being refactored to use DataAccess
+// Use DataAccess.getSchema() for new code - see dataAccess.js
 const Schema = {
     // Schema state
     currentDatasourceType: null,
@@ -153,7 +155,7 @@ const Schema = {
     // Bind event handlers
     bindEvents() {
         // Listen for datasource changes
-        const datasourceSelect = document.getElementById('datasource');
+        const datasourceSelect = document.getElementById('schemaDatasourceSelect');
         if (datasourceSelect) {
             datasourceSelect.addEventListener('change', () => {
                 this.onDatasourceChange();
@@ -163,7 +165,7 @@ const Schema = {
     
     // Handle datasource change
     async onDatasourceChange() {
-        const datasourceSelect = document.getElementById('datasource');
+        const datasourceSelect = document.getElementById('schemaDatasourceSelect');
         const selectedOption = datasourceSelect.selectedOptions[0];
         
         if (!selectedOption || !selectedOption.value) {
@@ -523,8 +525,10 @@ const Schema = {
             console.log('Executing: SHOW RETENTION POLICIES');
             const retentionPoliciesResult = await this.executeSchemaQuery('SHOW RETENTION POLICIES', 'influxdb');
             console.log('Retention policies result:', retentionPoliciesResult);
+            console.log('🔍 Retention policies result structure:', JSON.stringify(retentionPoliciesResult, null, 2));
             
             if (retentionPoliciesResult && retentionPoliciesResult.results && retentionPoliciesResult.results.A) {
+                console.log('🎯 Processing retention policies results.A:', retentionPoliciesResult.results.A);
                 this.influxRetentionPolicies = this.extractInfluxResults(retentionPoliciesResult.results.A);
                 console.log('Extracted retention policies:', this.influxRetentionPolicies);
             } else {
@@ -807,147 +811,33 @@ const Schema = {
         return result;
     },
     
-    // Execute InfluxDB schema query using direct proxy endpoint
+    // Legacy method - redirects to executeSchemaQuery
     async executeInfluxSchemaQuery(query, datasourceNumericId) {
-        try {
-            console.log('Executing InfluxDB schema query:', query);
-            
-            const endpoint = `/api/datasources/proxy/${datasourceNumericId}/query?q=${encodeURIComponent(query)}`;
-            
-            const response = await API.makeApiRequest(endpoint, {
-                method: 'GET'
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Schema query failed: ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            console.log('InfluxDB schema query response:', data);
-            
-            // Convert InfluxDB response to the expected format
-            if (data.results && data.results[0] && data.results[0].series) {
-                const series = data.results[0].series[0];
-                const values = series.values || [];
-                
-                // Convert to frames format expected by the rest of the code
-                const frames = [{
-                    schema: {
-                        fields: series.columns.map(col => ({ name: col, type: 'string' }))
-                    },
-                    data: {
-                        values: series.columns.map((col, colIndex) => 
-                            values.map(row => row[colIndex])
-                        )
-                    }
-                }];
-                
-                return {
-                    results: {
-                        A: { frames }
-                    }
-                };
-            }
-            
-            return { results: { A: { frames: [] } } };
-            
-        } catch (error) {
-            console.error('InfluxDB schema query error:', error);
-            throw error;
-        }
+        return this.executeSchemaQuery(query, 'influxdb');
     },
     
-    // Execute schema discovery query
+    // Execute schema discovery query using DataAccess layer
     async executeSchemaQuery(query, datasourceType) {
-        // Try to get datasource info from old interface first, fallback to global config
-        let datasourceNumericId;
-        const selectedOption = document.getElementById('datasource');
-        if (selectedOption && selectedOption.selectedOptions && selectedOption.selectedOptions[0]) {
-            datasourceNumericId = selectedOption.selectedOptions[0].dataset.id;
-        } else {
-            // Use global config for new interface
-            datasourceNumericId = GrafanaConfig.selectedDatasourceNumericId || GrafanaConfig.selectedDatasourceId;
-        }
-        
-        if (!datasourceNumericId) {
-            console.warn('No datasource ID available for schema query');
-            return null;
-        }
-        
-        let requestBody;
-        let urlParams = '';
-        
-        const now = Date.now();
-        const fromTime = now - (60 * 60 * 1000); // 1 hour ago
-        const toTime = now;
-        
-        if (datasourceType === 'prometheus') {
-            const requestId = Math.random().toString(36).substr(2, 9);
-            urlParams = '?ds_type=prometheus&requestId=' + requestId;
+        try {
+            // Use currentDatasourceId if set (for specific schema loading), 
+            // otherwise fall back to global datasourceId
+            const datasourceId = this.currentDatasourceId || GrafanaConfig.datasourceId;
+            if (!datasourceId) {
+                throw new Error('No datasource selected');
+            }
             
-            requestBody = {
-                queries: [{
-                    refId: 'A',
-                    datasource: { 
-                        uid: this.currentDatasourceId,
-                        type: 'prometheus'
-                    },
-                    expr: query,
-                    instant: true,
-                    interval: '',
-                    legendFormat: '',
-                    editorMode: 'code',
-                    exemplar: false,
-                    requestId: requestId.substr(0, 3).toUpperCase(),
-                    utcOffsetSec: new Date().getTimezoneOffset() * -60,
-                    scopes: [],
-                    adhocFilters: [],
-                    datasourceId: parseInt(datasourceNumericId),
-                    intervalMs: 15000,
-                    maxDataPoints: 10000
-                }],
-                from: fromTime.toString(),
-                to: toTime.toString()
-            };
-        } else if (datasourceType === 'influxdb') {
-            const requestId = Math.random().toString(36).substr(2, 9);
-            urlParams = '?ds_type=influxdb&requestId=' + requestId;
+            // Use DataAccess layer for schema queries
+            const result = await DataAccess.executeQuery(datasourceId, query, {
+                datasourceType: datasourceType || 'influxdb',
+                maxDataPoints: 10000,
+                raw: true
+            });
             
-            requestBody = {
-                queries: [{
-                    refId: 'A',
-                    datasource: { 
-                        uid: this.currentDatasourceId,
-                        type: 'influxdb'
-                    },
-                    query: query,
-                    rawQuery: true,
-                    resultFormat: 'time_series',
-                    requestId: requestId.substr(0, 3).toUpperCase(),
-                    utcOffsetSec: new Date().getTimezoneOffset() * -60,
-                    datasourceId: parseInt(datasourceNumericId),
-                    intervalMs: 15000,
-                    maxDataPoints: 10000
-                }],
-                from: fromTime.toString(),
-                to: toTime.toString()
-            };
+            return result;
+        } catch (error) {
+            console.error('Schema query error:', error);
+            throw error;
         }
-        
-        const response = await API.makeApiRequest('/api/ds/query' + urlParams, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error('Schema query failed: ' + response.statusText + ' - ' + errorText);
-        }
-        
-        return await response.json();
     },
     
     // Load tags associated with a specific field
@@ -1231,22 +1121,40 @@ const Schema = {
     extractInfluxResults(result) {
         const values = [];
         
-        if (!result.frames || result.frames.length === 0) {
-            return values;
-        }
-        
-        for (const frame of result.frames) {
-            if (!frame.data || !frame.data.values) continue;
-            
-            // For SHOW commands, InfluxDB typically returns a single column of values
-            // Try to get the first (and usually only) column of values
-            if (frame.data.values.length > 0 && Array.isArray(frame.data.values[0])) {
-                const columnValues = frame.data.values[0];
-                for (const value of columnValues) {
-                    if (value !== null && value !== undefined) {
-                        const stringValue = String(value);
-                        if (!values.includes(stringValue)) {
-                            values.push(stringValue);
+        // Handle both old format (series) and new format (frames)
+        if (result.frames && result.frames.length > 0) {
+            // New Grafana frame format
+            for (const frame of result.frames) {
+                if (!frame.data || !frame.data.values) continue;
+                
+                // For SHOW commands, InfluxDB data can be in column format
+                // The first column contains the values we want
+                if (frame.data.values.length > 0 && Array.isArray(frame.data.values[0])) {
+                    const columnValues = frame.data.values[0];
+                    for (const value of columnValues) {
+                        if (value !== null && value !== undefined) {
+                            const stringValue = String(value);
+                            if (!values.includes(stringValue)) {
+                                values.push(stringValue);
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (result.series && result.series.length > 0) {
+            // Old InfluxDB format (for backward compatibility)
+            for (const series of result.series) {
+                if (!series.values) continue;
+                
+                for (const row of series.values) {
+                    if (Array.isArray(row)) {
+                        // Take the first column (usually the value we want)
+                        const value = row[0];
+                        if (value !== null && value !== undefined) {
+                            const stringValue = String(value);
+                            if (!values.includes(stringValue)) {
+                                values.push(stringValue);
+                            }
                         }
                     }
                 }
@@ -1482,9 +1390,9 @@ const Schema = {
         
         html += '<div class="tree-subnode">';
         html += '<div class="tree-subnode-header measurement-header">';
-        html += '<span class="tree-node-icon" onclick="toggleInfluxMeasurement(this.parentElement, \'' + Utils.escapeHtml(measurement) + '\', \'' + Utils.escapeHtml(retentionPolicy) + '\')">▶</span>';
+        html += '<span class="tree-node-icon expand-button" aria-expanded="false" onclick="toggleInfluxMeasurement(this.parentElement, \'' + Utils.escapeHtml(measurement) + '\', \'' + Utils.escapeHtml(retentionPolicy) + '\')">▶</span>';
         html += '<span class="tree-item-icon">📋</span>';
-        html += '<span class="tree-item-name" onclick="insertMeasurement(\'' + Utils.escapeHtml(measurement) + '\')" title="Click to insert measurement">' + Utils.escapeHtml(measurement) + '</span>';
+        html += '<span class="tree-item-name" data-measurement="' + Utils.escapeHtml(measurement) + '" onclick="insertMeasurement(\'' + Utils.escapeHtml(measurement) + '\')" title="Click to insert measurement">' + Utils.escapeHtml(measurement) + '</span>';
         html += '</div>';
         html += '<div class="tree-subnode-content collapsed" id="fields-' + Utils.escapeHtml(measurement).replace(/[^a-zA-Z0-9]/g, '_') + '">';
         
@@ -1505,7 +1413,7 @@ const Schema = {
         html += '<div class="tree-subnode-header field-header">';
         html += '<span class="tree-node-icon" onclick="toggleInfluxField(this.parentElement, \'' + Utils.escapeHtml(field) + '\', \'' + Utils.escapeHtml(measurement) + '\')">▶</span>';
         html += '<span class="tree-item-icon">🔢</span>';
-        html += '<span class="tree-item-name" onclick="insertField(\'' + Utils.escapeHtml(field) + '\')" title="Click to insert field">' + Utils.escapeHtml(field) + '</span>';
+        html += '<span class="tree-item-name field-key schema-field" onclick="insertField(\'' + Utils.escapeHtml(field) + '\')" title="Click to insert field">' + Utils.escapeHtml(field) + '</span>';
         html += '</div>';
         html += '<div class="tree-subnode-content collapsed" id="tags-' + Utils.escapeHtml(field).replace(/[^a-zA-Z0-9]/g, '_') + '-' + Utils.escapeHtml(measurement).replace(/[^a-zA-Z0-9]/g, '_') + '">';
         
@@ -1761,10 +1669,12 @@ async function toggleInfluxMeasurement(header, measurement, retentionPolicy) {
         content.classList.remove('expanded');
         content.classList.add('collapsed');
         icon.textContent = '▶';
+        icon.setAttribute('aria-expanded', 'false');
     } else {
         content.classList.remove('collapsed');
         content.classList.add('expanded');
         icon.textContent = '▼';
+        icon.setAttribute('aria-expanded', 'true');
         
         // Check if fields are already loaded
         if (!Schema.influxFields[measurement] || content.innerHTML.includes('Click arrow to load fields')) {
@@ -2273,3 +2183,6 @@ function filterTagValuesList(searchTerm, tag, field, measurement) {
     
     valuesContainer.innerHTML = valuesHtml;
 }
+
+// Export Schema to global window for access by other modules
+window.Schema = Schema;
