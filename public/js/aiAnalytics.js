@@ -783,13 +783,28 @@ const AIAnalytics = {
         const provider = activeConnection?.provider || 'ollama';
         
         console.log('🤖 Using AI provider:', provider);
+        console.log('🔍 Active connection:', activeConnection);
         
         if (provider === 'openai') {
+            console.log('🔍 OpenAI check:', {
+                exists: typeof OpenAIService !== 'undefined',
+                isConnected: window.OpenAIService?.isConnected
+            });
             if (typeof OpenAIService === 'undefined' || !OpenAIService.isConnected) {
                 throw new Error('OpenAI service not available or not connected');
             }
         } else {
+            console.log('🔍 Ollama check:', {
+                exists: typeof OllamaService !== 'undefined',
+                isConnected: window.OllamaService?.isConnected,
+                globalOllama: window.OllamaService
+            });
             if (typeof OllamaService === 'undefined' || !OllamaService.isConnected) {
+                console.error('🔴 Ollama not connected!', {
+                    typeofCheck: typeof OllamaService,
+                    isConnectedCheck: OllamaService?.isConnected,
+                    windowCheck: window.OllamaService?.isConnected
+                });
                 throw new Error('Ollama service not available or not connected');
             }
         }
